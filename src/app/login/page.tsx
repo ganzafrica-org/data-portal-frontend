@@ -39,7 +39,7 @@ export default function LoginPage() {
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-4 text-center">
                     <div className="flex justify-center">
-                        <div className="flex items-center justify-center w-12 h-12 bg-primary rounded-lg">
+                        <div className="flex items-center justify-center w-12 h-12 bg-blue rounded-lg">
                             <FileText className="h-6 w-6 text-white" />
                         </div>
                     </div>
