@@ -79,8 +79,9 @@ export default function ProfilePage() {
                 newPassword: '',
                 confirmPassword: ''
             }))
-        } catch (error) {
+        } catch (error: any) {
             toast.error('Failed to update profile')
+            console.error('Error updating profile:', error)
         } finally {
             setIsSaving(false)
         }

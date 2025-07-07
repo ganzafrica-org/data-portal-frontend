@@ -48,7 +48,7 @@ export default function UserDetails({userId}: UserDetailsProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
-    if (!currentUser || !hasPermission('canManageUsers')) {
+    if (!currentUser || !hasPermission('canManageUsers') && currentUser.id !== userId) {
         return (
             <div className="text-center py-8">
                 <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />

@@ -382,7 +382,7 @@ export default function UsersTable() {
                                                 <div className="flex justify-end space-x-1">
                                                     <Button variant="ghost" size="sm" asChild>
                                                         <a href={`/users/${user.id}`}>
-                                                            <Edit className="h-4 w-4" />
+                                                            <Edit className="h-4 w-4 text-blue" />
                                                         </a>
                                                     </Button>
                                                     {user.id !== currentUser.id && (
@@ -392,7 +392,7 @@ export default function UsersTable() {
                                                             onClick={() => handleDeleteUser(user.id)}
                                                             disabled={isProcessing}
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Trash2 className="h-4 w-4 text-red-500" />
                                                         </Button>
                                                     )}
                                                 </div>
@@ -408,26 +408,26 @@ export default function UsersTable() {
 
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
+                <Card className="bg-blue-100">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                        <UserPlus className="h-4 w-4 text-muted-foreground" />
+                        <UserPlus className="h-4 w-4 text-blue" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{DUMMY_USERS.length}</div>
+                        <div className="text-2xl font-bold text-blue">{DUMMY_USERS.length}</div>
                         <p className="text-xs text-muted-foreground">
                             Registered in the system
                         </p>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="bg-green-100">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Internal Staff</CardTitle>
-                        <Shield className="h-4 w-4 text-blue-600" />
+                        <Shield className="h-4 w-4 text-green" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-2xl font-bold text-green">
                             {DUMMY_USERS.filter(u => u.role === 'internal' || u.role === 'admin').length}
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -436,13 +436,13 @@ export default function UsersTable() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="bg-yellow-100">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">External Users</CardTitle>
-                        <UserPlus className="h-4 w-4 text-green-600" />
+                        <UserPlus className="h-4 w-4 text-yellow" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-600">
+                        <div className="text-2xl font-bold text-yellow">
                             {DUMMY_USERS.filter(u => u.role === 'external').length}
                         </div>
                         <p className="text-xs text-muted-foreground">

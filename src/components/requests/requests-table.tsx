@@ -95,7 +95,7 @@ export default function RequestsTable({ showCreateButton = true }: RequestsTable
                         }
                     </p>
                 </div>
-                {showCreateButton && user.role === 'external' && (
+                {showCreateButton && (user.role === 'internal' || user.role === 'external') && (
                     <Button asChild>
                         <Link href="/requests/new">
                             <Plus className="h-4 w-4 mr-2" />
@@ -198,19 +198,19 @@ export default function RequestsTable({ showCreateButton = true }: RequestsTable
                                                     <div className="flex space-x-1">
                                                         <Button variant="ghost" size="sm" asChild>
                                                             <Link href={`/requests/${request.id}`}>
-                                                                <Eye className="h-4 w-4" />
+                                                                <Eye className="h-4 w-4 text-blue" />
                                                             </Link>
                                                         </Button>
                                                         {canEditRequest(request) && (
                                                             <Button variant="ghost" size="sm" asChild>
                                                                 <Link href={`/requests/${request.id}/edit`}>
-                                                                    <Edit className="h-4 w-4" />
+                                                                    <Edit className="h-4 w-4 text-yellow-500" />
                                                                 </Link>
                                                             </Button>
                                                         )}
                                                         {canDeleteRequest(request) && (
                                                             <Button variant="ghost" size="sm">
-                                                                <Trash2 className="h-4 w-4" />
+                                                                <Trash2 className="h-4 w-4 text-red-500" />
                                                             </Button>
                                                         )}
                                                     </div>

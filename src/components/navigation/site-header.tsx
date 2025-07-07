@@ -68,7 +68,7 @@ export function SiteHeader() {
                                     </p>
                                 </div>
                                 <Avatar className="w-8 h-8">
-                                    <AvatarFallback className="bg-primary text-white">
+                                    <AvatarFallback className="bg-green text-white">
                                         {getInitials(user.name)}
                                     </AvatarFallback>
                                 </Avatar>
@@ -94,7 +94,7 @@ export function SiteHeader() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={logout} className="text-red-600">
-                                <LogOut className="mr-2 h-4 w-4" />
+                                <LogOut className="mr-2 h-4 w-4 text-red-500" />
                                 Sign Out
                             </DropdownMenuItem>
                         </DropdownMenuContent>

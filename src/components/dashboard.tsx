@@ -115,8 +115,9 @@ export default function Dashboard() {
             {
                 title: "Total Requests",
                 value: stats.totalRequests,
-                icon: <FileText className="h-4 w-4 text-muted-foreground" />,
-                description: stats.showSystemStats ? "All data requests" : "Your requests"
+                icon: <FileText className="h-4 w-4 text-blue" />,
+                description: stats.showSystemStats ? "All data requests" : "Your requests",
+                textColor: "text-blue"
             },
             {
                 title: stats.showSystemStats ? "Pending Approval" : "Pending",
@@ -148,12 +149,23 @@ export default function Dashboard() {
                 title: "Total Users",
                 value: stats.totalUsers!,
                 icon: <Users className="h-4 w-4 text-muted-foreground" />,
-                description: `${stats.externalUsers} external, ${stats.totalUsers! - stats.externalUsers!} internal`
+                description: `${stats.externalUsers} external, ${stats.totalUsers! - stats.externalUsers!} internal`,
+                textColor: "text-blue"
             }
         }
 
         return baseCards.map((card, index) => (
-            <Card key={index}>
+            <Card key={index} className={`${
+                index === 0
+                    ? 'bg-blue-100'
+                    : index === 1
+                        ? 'bg-yellow-100'
+                        : index === 2
+                            ? 'bg-green-100'
+                            : index === 3
+                                ? 'bg-purple-100'
+                                : 'bg-pink-100'
+            }`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
                     {card.icon}
@@ -187,14 +199,14 @@ export default function Dashboard() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg p-6">
+            <div className="bg-gradient-to-r from-green/50 to-yellow/20 rounded-lg p-6">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">
                     {welcomeMessage.title}
                 </h1>
                 <p className="text-gray-600 mb-4">
                     {welcomeMessage.subtitle}
                 </p>
-                {user.role === 'external' && (
+                {(user.role === 'internal' || user.role === 'external') && (
                     <Button asChild>
                         <Link href="/requests/new">
                             <Plus className="h-4 w-4 mr-2" />

@@ -85,18 +85,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar
             collapsible="icon"
             variant="sidebar"
-            className="bg-primary border-r-0"
+            className="bg-blue border-r-0"
             {...props}
         >
-            <SidebarHeader className="bg-primary">
+            <SidebarHeader className="bg-blue">
                 <AppHeader />
             </SidebarHeader>
 
-            <SidebarContent className="bg-primary">
+            <SidebarContent className="bg-blue">
                 <NavMain items={navItems} />
             </SidebarContent>
 
-            <SidebarFooter className="bg-primary">
+            <SidebarFooter className="bg-blue">
                 <NavUser onSignOut={logout} />
             </SidebarFooter>
 

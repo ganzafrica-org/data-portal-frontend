@@ -1,20 +1,22 @@
 "use client"
 
 import { notFound } from 'next/navigation'
+import { use } from 'react'
 import RequestForm from '@/components/requests/request-form'
 import { DUMMY_REQUESTS } from '@/lib/data'
 import { useAuth } from '@/contexts/auth-context'
 
 interface EditRequestPageProps {
-    params: {
+    params: Promise<{
         id: string
-    }
+    }>
 }
 
 export default function EditRequestPage({ params }: EditRequestPageProps) {
     const { user, hasPermission } = useAuth()
 
-    const request = DUMMY_REQUESTS.find(req => req.id === params.id)
+    const resolvedParams = use(params)
+    const request = DUMMY_REQUESTS.find(req => req.id === resolvedParams.id)
 
     if (!request) {
         notFound()

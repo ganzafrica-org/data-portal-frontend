@@ -1,18 +1,19 @@
 "use client"
 
 import { notFound } from 'next/navigation'
+import { use } from 'react'
 import RequestDetails from '@/components/requests/request-details'
 import { DUMMY_REQUESTS } from '@/lib/data'
 
 interface RequestDetailPageProps {
-    params: {
+    params: Promise<{
         id: string
-    }
+    }>
 }
 
 export default function RequestDetailPage({ params }: RequestDetailPageProps) {
-
-    const request = DUMMY_REQUESTS.find(req => req.id === params.id)
+    const resolvedParams = use(params)
+    const request = DUMMY_REQUESTS.find(req => req.id === resolvedParams.id)
 
     if (!request) {
         notFound()

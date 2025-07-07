@@ -23,7 +23,7 @@ export default function AppLoader() {
                     </div>
                 </div>
 
-                {/* Animated Icons */}
+                
                 <div className="flex justify-center space-x-8">
                     <div className="animate-bounce" style={{ animationDelay: '0ms' }}>
                         <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
