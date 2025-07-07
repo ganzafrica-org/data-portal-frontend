@@ -1,0 +1,291 @@
+"use client"
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { FileText, Clock, CheckCircle, XCircle, Plus, ArrowRight, Users, AlertCircle } from "lucide-react"
+import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
+import { DUMMY_REQUESTS, DUMMY_USERS } from "@/lib/data"
+
+export default function Dashboard() {
+    const { user, hasPermission, canViewRequest } = useAuth()
+
+    if (!user) return null
+
+    const visibleRequests = DUMMY_REQUESTS.filter(req => canViewRequest(req.userId))
+
+    const getStats = () => {
+        if (hasPermission('canViewAllRequests')) {
+            return {
+                totalRequests: DUMMY_REQUESTS.length,
+                pendingRequests: DUMMY_REQUESTS.filter(r => r.status === 'pending').length,
+                approvedRequests: DUMMY_REQUESTS.filter(r => r.status === 'approved').length,
+                rejectedRequests: DUMMY_REQUESTS.filter(r => r.status === 'rejected').length,
+                totalUsers: DUMMY_USERS.length,
+                externalUsers: DUMMY_USERS.filter(u => u.role === 'external').length,
+                showSystemStats: true
+            }
+        } else {
+            const userRequests = visibleRequests.filter(req => req.userId === user.id)
+            return {
+                totalRequests: userRequests.length,
+                pendingRequests: userRequests.filter(r => r.status === 'pending').length,
+                approvedRequests: userRequests.filter(r => r.status === 'approved').length,
+                rejectedRequests: userRequests.filter(r => r.status === 'rejected').length,
+                showSystemStats: false
+            }
+        }
+    }
+
+    const stats = getStats()
+
+    const getRecentRequests = () => {
+        if (hasPermission('canApproveRequests')) {
+            return DUMMY_REQUESTS
+                .filter(r => r.status === 'pending')
+                .sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime())
+                .slice(0, 5)
+        } else {
+            return visibleRequests
+                .sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime())
+                .slice(0, 5)
+        }
+    }
+
+    const recentRequests = getRecentRequests()
+
+    const getWelcomeMessage = () => {
+        switch (user.role) {
+            case 'admin':
+                return {
+                    title: 'Admin Dashboard',
+                    subtitle: 'Manage data requests, users, and system oversight.'
+                }
+            case 'internal':
+                return {
+                    title: `Welcome back, ${user.name}!`,
+                    subtitle: hasPermission('canApproveRequests')
+                        ? 'Review and manage data requests.'
+                        : 'Access internal data and submit requests.'
+                }
+            case 'external':
+                return {
+                    title: `Welcome back, ${user.name}!`,
+                    subtitle: 'Manage your data requests and track their progress here.'
+                }
+            default:
+                return {
+                    title: 'Dashboard',
+                    subtitle: 'Welcome to the NLA Data Portal.'
+                }
+        }
+    }
+
+    const welcomeMessage = getWelcomeMessage()
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'pending':
+                return <Clock className="h-4 w-4" />
+            case 'approved':
+                return <CheckCircle className="h-4 w-4" />
+            case 'rejected':
+                return <XCircle className="h-4 w-4" />
+            default:
+                return <FileText className="h-4 w-4" />
+        }
+    }
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'pending':
+                return 'bg-yellow-100 text-yellow-800'
+            case 'approved':
+                return 'bg-green-100 text-green-800'
+            case 'rejected':
+                return 'bg-red-100 text-red-800'
+            default:
+                return 'bg-gray-100 text-gray-800'
+        }
+    }
+
+    const renderStatsCards = () => {
+        const baseCards = [
+            {
+                title: "Total Requests",
+                value: stats.totalRequests,
+                icon: <FileText className="h-4 w-4 text-muted-foreground" />,
+                description: stats.showSystemStats ? "All data requests" : "Your requests"
+            },
+            {
+                title: stats.showSystemStats ? "Pending Approval" : "Pending",
+                value: stats.pendingRequests,
+                icon: hasPermission('canApproveRequests')
+                    ? <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    : <Clock className="h-4 w-4 text-yellow-600" />,
+                description: stats.showSystemStats ? "Need attention" : "Awaiting approval",
+                textColor: "text-yellow-600"
+            },
+            {
+                title: "Approved",
+                value: stats.approvedRequests,
+                icon: <CheckCircle className="h-4 w-4 text-green-600" />,
+                description: stats.showSystemStats ? "Processed requests" : "Ready for download",
+                textColor: "text-green-600"
+            },
+            {
+                title: "Rejected",
+                value: stats.rejectedRequests,
+                icon: <XCircle className="h-4 w-4 text-red-600" />,
+                description: stats.showSystemStats ? "Declined requests" : "Need attention",
+                textColor: "text-red-600"
+            }
+        ]
+
+        if (stats.showSystemStats && hasPermission('canManageUsers')) {
+            baseCards[3] = {
+                title: "Total Users",
+                value: stats.totalUsers!,
+                icon: <Users className="h-4 w-4 text-muted-foreground" />,
+                description: `${stats.externalUsers} external, ${stats.totalUsers! - stats.externalUsers!} internal`
+            }
+        }
+
+        return baseCards.map((card, index) => (
+            <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+                    {card.icon}
+                </CardHeader>
+                <CardContent>
+                    <div className={`text-2xl font-bold ${card.textColor || ''}`}>
+                        {card.value}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        {card.description}
+                    </p>
+                </CardContent>
+            </Card>
+        ))
+    }
+
+    const getRequestsCardTitle = () => {
+        if (hasPermission('canApproveRequests')) {
+            return {
+                title: "Pending Requests",
+                description: "Requests awaiting your approval"
+            }
+        }
+        return {
+            title: "Recent Requests",
+            description: stats.showSystemStats ? "Latest system activity" : "Your recent data requests"
+        }
+    }
+
+    const requestsCardInfo = getRequestsCardTitle()
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg p-6">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                    {welcomeMessage.title}
+                </h1>
+                <p className="text-gray-600 mb-4">
+                    {welcomeMessage.subtitle}
+                </p>
+                {user.role === 'external' && (
+                    <Button asChild>
+                        <Link href="/requests/new">
+                            <Plus className="h-4 w-4 mr-2" />
+                            New Request
+                        </Link>
+                    </Button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                {renderStatsCards()}
+            </div>
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>{requestsCardInfo.title}</CardTitle>
+                        <CardDescription>
+                            {requestsCardInfo.description}
+                        </CardDescription>
+                    </div>
+                    <Button variant="outline" asChild>
+                        <Link href="/requests">
+                            View All
+                            <ArrowRight className="h-4 w-4 ml-2" />
+                        </Link>
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    {recentRequests.length === 0 ? (
+                        <div className="text-center py-8">
+                            {hasPermission('canApproveRequests') ? (
+                                <>
+                                    <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">All caught up!</h3>
+                                    <p className="text-gray-600">No pending requests to review.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No requests yet</h3>
+                                    <p className="text-gray-600 mb-4">Start by creating your first data request.</p>
+                                    {user.role === 'external' && (
+                                        <Button asChild>
+                                            <Link href="/requests/new">
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                Create Request
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {recentRequests.map((request) => (
+                                <div
+                                    key={request.id}
+                                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    <div className="flex items-center space-x-4">
+                                        <div className="flex-shrink-0">
+                                            {getStatusIcon(request.status)}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900">{request.title}</h4>
+                                            <p className="text-sm text-gray-600">
+                                                {request.requestNumber}
+                                                {stats.showSystemStats && ` • ${request.userName}`}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                Created {new Date(request.dateCreated).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Badge className={getStatusColor(request.status)}>
+                                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                                        </Badge>
+                                        <Button variant="ghost" size="sm" asChild>
+                                            <Link href={`/requests/${request.id}`}>
+                                                {hasPermission('canApproveRequests') && request.status === 'pending' ? 'Review' : 'View'}
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    )
+}
