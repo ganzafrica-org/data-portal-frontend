@@ -47,9 +47,11 @@
 }
 
 :root {
-  --blue: oklch(0.396 0.138 251.77);
-  --green: oklch(0.588 0.108 162.48);
-  --yellow: oklch(0.749 0.092 85.87);
+  --blue:#17a0db;
+  --yellow: #f8d308;
+  --light-blue: #a3def4;
+  --green: #1d603e;
+  --light-yellow: #fdcb6e;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
