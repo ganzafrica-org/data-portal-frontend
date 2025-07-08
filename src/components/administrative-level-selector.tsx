@@ -86,7 +86,7 @@ export default function AdministrativeLevelSelector({ value, onChange }: Adminis
         <div className="space-y-4">
             <Label>Administrative Level *</Label>
 
-            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">Provinces</Label>
                 <MultiSelectDropdown
@@ -96,6 +96,7 @@ export default function AdministrativeLevelSelector({ value, onChange }: Adminis
                     placeholder="Select provinces"
                 />
             </div>
+
 
             
             {currentSelection.provinces.length > 0 && (
@@ -122,7 +123,7 @@ export default function AdministrativeLevelSelector({ value, onChange }: Adminis
                     />
                 </div>
             )}
-
+            </div>
             
             {currentSelection.provinces.length > 0 && (
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -136,6 +137,7 @@ export default function AdministrativeLevelSelector({ value, onChange }: Adminis
                     </div>
                 </div>
             )}
+
         </div>
     )
 }

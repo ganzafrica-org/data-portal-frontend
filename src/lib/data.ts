@@ -217,17 +217,3 @@ export const DUMMY_REQUESTS: DataRequest[] = [
         applicantType: 'organization'
     }
 ]
-
-export const AVAILABLE_DATASETS = [
-    { id: 'parcel-data', name: 'Parcel Data', description: 'Land parcel boundaries and information' },
-    { id: 'land-use', name: 'Land Use Classification', description: 'Current land use types and classifications' },
-    { id: 'admin-boundaries', name: 'Administrative Boundaries', description: 'Province, district, sector, and cell boundaries' },
-    { id: 'transaction-reports', name: 'Transaction Reports', description: 'Land transaction statistics and reports' },
-    { id: 'approval-stats', name: 'Approval Statistics', description: 'Application approval metrics' },
-    { id: 'agricultural-data', name: 'Agricultural Land Data', description: 'Agricultural land parcels and productivity data' },
-    { id: 'soil-classification', name: 'Soil Classification', description: 'Soil types and quality classifications' },
-    { id: 'urban-parcel', name: 'Urban Parcel Data', description: 'Urban area parcel information' },
-    { id: 'zoning', name: 'Zoning Information', description: 'Urban planning and zoning data' },
-    { id: 'infrastructure', name: 'Infrastructure Maps', description: 'Infrastructure and utilities mapping' },
-    { id: 'topographical', name: 'Topographical Data', description: 'Elevation and terrain information' }
-]

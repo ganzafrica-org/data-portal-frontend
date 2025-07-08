@@ -8,29 +8,176 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Badge } from "@/components/ui/badge"
-import { Upload, X, FileText, AlertCircle, Plus, Trash2, Check, Database, Filter, ChevronDown } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Upload, X, FileText, AlertCircle, Plus, Trash2, Database, Filter, ChevronDown, ChevronRight, Info, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
 import { DataRequest } from "@/lib/data"
 import { DATASET_CATEGORIES, TRANSACTION_TYPES, LAND_USE_TYPES } from "@/lib/dataset-config"
-import { cn } from "@/lib/utils"
-import DateRangePicker from "@/components/date-range-picker";
-import AdministrativeLevelSelector from "@/components/administrative-level-selector";
+import DateRangePicker from "@/components/date-range-picker"
+import AdministrativeLevelSelector from "@/components/administrative-level-selector"
+import MultiSelectDropdown from "@/components/multi-select-dropdown"
 
 interface DatasetSelection {
     id: string
     category: string
     type: string
     criteria: Record<string, any>
+    isOpen: boolean
 }
-
 
 interface RequestFormProps {
     mode: 'create' | 'edit'
     initialData?: DataRequest
+}
+
+interface FileWithCategory {
+    file: File
+    category: 'verification' | 'research' | 'authorization' | 'other'
+}
+
+const UpiBadge = ({ upi, onRemove }: { upi: string, onRemove: () => void }) => (
+    <Badge variant="outline" className="flex items-center gap-1 px-2 py-1">
+        {upi}
+        <X className="h-3 w-3 cursor-pointer" onClick={onRemove} />
+    </Badge>
+)
+
+const UpiInput = ({ value, onChange, placeholder }: {
+    value: string[],
+    onChange: (upis: string[]) => void,
+    placeholder: string
+}) => {
+    const [inputValue, setInputValue] = useState('')
+
+    const addUpi = () => {
+        if (inputValue.trim() && !value.includes(inputValue.trim())) {
+            onChange([...value, inputValue.trim()])
+            setInputValue('')
+        }
+    }
+
+    const removeUpi = (upiToRemove: string) => {
+        onChange(value.filter(upi => upi !== upiToRemove))
+    }
+
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault()
+            addUpi()
+        }
+    }
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault()
+        const pastedText = e.clipboardData.getData('text')
+        const upis = pastedText.split(/[,\n\r]+/).map(upi => upi.trim()).filter(upi => upi)
+        const newUpis = upis.filter(upi => !value.includes(upi))
+        onChange([...value, ...newUpis])
+    }
+
+    return (
+        <div className="space-y-2">
+            <div className="flex gap-2">
+                <Input
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    onPaste={handlePaste}
+                    placeholder={placeholder}
+                    className="flex-1"
+                />
+                <Button type="button" onClick={addUpi} size="sm" disabled={!inputValue.trim()}>
+                    Add
+                </Button>
+            </div>
+            {value.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 bg-gray-50 rounded-md min-h-[2.5rem]">
+                    {value.map((upi, index) => (
+                        <UpiBadge key={index} upi={upi} onRemove={() => removeUpi(upi)} />
+                    ))}
+                </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+                Enter UPIs one by one or paste multiple UPIs separated by commas or new lines
+            </p>
+        </div>
+    )
+}
+
+const DatasetPreview = ({ dataset }: { dataset: any }) => {
+    const [showPreview, setShowPreview] = useState(false)
+
+    if (!dataset?.fields) return null
+
+    const sampleData = [
+        dataset.fields.reduce((acc: any, field: string, index: number) => {
+            acc[field] = `Sample ${index + 1}`
+            return acc
+        }, {}),
+        dataset.fields.reduce((acc: any, field: string, index: number) => {
+            acc[field] = `Example ${index + 1}`
+            return acc
+        }, {}),
+        dataset.fields.reduce((acc: any, field: string, index: number) => {
+            acc[field] = `Data ${index + 1}`
+            return acc
+        }, {})
+    ]
+
+    return (
+        <div className="space-y-2">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
+                className="flex items-center gap-2"
+            >
+                <Eye className="h-4 w-4" />
+                {showPreview ? 'Hide' : 'Show'} Data Preview
+            </Button>
+
+            {showPreview && (
+                <div className="border rounded-lg p-3 bg-gray-50">
+                    <h5 className="font-medium text-sm mb-2">Sample Data Structure:</h5>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs border-collapse">
+                            <thead>
+                            <tr className="bg-gray-100">
+                                {dataset.fields.slice(0, 5).map((field: string, index: number) => (
+                                    <th key={index} className="border p-1 text-left font-medium">
+                                        {field}
+                                    </th>
+                                ))}
+                                {dataset.fields.length > 5 && <th className="border p-1 text-left">...</th>}
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {sampleData.map((row, rowIndex) => (
+                                <tr key={rowIndex}>
+                                    {dataset.fields.slice(0, 5).map((field: string, colIndex: number) => (
+                                        <td key={colIndex} className="border p-1 text-gray-600">
+                                            {row[field]}
+                                        </td>
+                                    ))}
+                                    {dataset.fields.length > 5 && <td className="border p-1 text-gray-400">...</td>}
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {dataset.fields.length > 5 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Showing first 5 of {dataset.fields.length} columns
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    )
 }
 
 export default function RequestForm({ mode, initialData }: RequestFormProps) {
@@ -44,7 +191,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     })
 
     const [datasetSelections, setDatasetSelections] = useState<DatasetSelection[]>([])
-    const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+    const [uploadedFiles, setUploadedFiles] = useState<FileWithCategory[]>([])
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     if (!user) return null
@@ -56,9 +203,16 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
             id: Date.now().toString(),
             category: '',
             type: '',
-            criteria: {}
+            criteria: {},
+            isOpen: true
         }
-        setDatasetSelections([...datasetSelections, newSelection])
+
+        const updatedSelections = datasetSelections.map(selection => ({
+            ...selection,
+            isOpen: false
+        }))
+
+        setDatasetSelections([...updatedSelections, newSelection])
     }
 
     const removeDatasetSelection = (id: string) => {
@@ -69,9 +223,22 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
         setDatasetSelections(selections =>
             selections.map(selection =>
                 selection.id === id
-                    ? { ...selection, [field]: value, ...(field === 'category' ? { type: '', criteria: {} } : {}) }
+                    ? {
+                        ...selection,
+                        [field]: value,
+                        ...(field === 'category' ? { type: '', criteria: {} } : {})
+                    }
                     : selection
             )
+        )
+    }
+
+    const toggleDatasetOpen = (id: string) => {
+        setDatasetSelections(selections =>
+            selections.map(selection => ({
+                ...selection,
+                isOpen: selection.id === id ? !selection.isOpen : false
+            }))
         )
     }
 
@@ -91,280 +258,300 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
         return (
             <Card key={selection.id} className="relative border-2 border-dashed border-gray-200 hover:border-primary/50 transition-colors">
-                <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center">
-                            <Database className="h-5 w-5 mr-2 text-primary" />
-                            Dataset {index + 1}
-                        </CardTitle>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeDatasetSelection(selection.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    {category && (
-                        <CardDescription className="flex items-center">
-                            <span className="text-lg mr-2">{category.icon}</span>
-                            {category.description}
-                        </CardDescription>
-                    )}
-                </CardHeader>
-
-                <CardContent className="space-y-6">
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Data Category *</Label>
-                            <Select
-                                value={selection.category}
-                                onValueChange={(value) => updateDatasetSelection(selection.id, 'category', value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Choose a data category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(DATASET_CATEGORIES).map(([key, category]) => (
-                                        <SelectItem key={key} value={key}>
-                                            <div className="flex items-center">
-                                                <span className="mr-2">{category.icon}</span>
-                                                {category.name}
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Specific Dataset *</Label>
-                            <Select
-                                value={selection.type}
-                                onValueChange={(value) => updateDatasetSelection(selection.id, 'type', value)}
-                                disabled={!selection.category}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select specific dataset" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {selection.category && DATASET_CATEGORIES[selection.category as keyof typeof DATASET_CATEGORIES]?.datasets.map(dataset => (
-                                        <SelectItem key={dataset.id} value={dataset.id}>
-                                            <div>
-                                                <div className="font-medium">{dataset.name}</div>
-                                                <div className="text-xs text-gray-500">{dataset.description}</div>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    
-                    {dataset && (
-                        <div className="space-y-6 p-4 bg-gray-50 rounded-lg border">
-                            <div className="flex items-center">
-                                <Filter className="h-4 w-4 mr-2 text-primary" />
-                                <h4 className="font-medium text-gray-900">Dataset Configuration</h4>
+                <Collapsible open={selection.isOpen} onOpenChange={() => toggleDatasetOpen(selection.id)}>
+                    <CollapsibleTrigger asChild>
+                        <CardHeader className="pb-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg flex items-center">
+                                    <Database className="h-5 w-5 mr-2 text-primary" />
+                                    Dataset {index + 1}
+                                    {selection.isOpen ? (
+                                        <ChevronDown className="h-4 w-4 ml-2" />
+                                    ) : (
+                                        <ChevronRight className="h-4 w-4 ml-2" />
+                                    )}
+                                </CardTitle>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        removeDatasetSelection(selection.id)
+                                    }}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
                             </div>
+                            {category && (
+                                <CardDescription className="flex items-center">
+                                    <span className="text-lg mr-2">{category.icon}</span>
+                                    {category.description}
+                                </CardDescription>
+                            )}
+                        </CardHeader>
+                    </CollapsibleTrigger>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                
-                                {dataset.hasAdminLevel && (
-                                    <AdministrativeLevelSelector
-                                        value={selection.criteria.administrativeSelection || {
-                                            provinces: [],
-                                            districts: [],
-                                            sectors: [],
-                                            cells: [],
-                                            villages: [],
-                                        }}
-                                        onChange={(adminSelection) => updateDatasetCriteria(selection.id, 'administrativeSelection', adminSelection)}
-                                    />
-                                )}
+                    <CollapsibleContent>
+                        <CardContent className="space-y-6">
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Data Category *</Label>
+                                    <Select
+                                        value={selection.category}
+                                        onValueChange={(value) => updateDatasetSelection(selection.id, 'category', value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Choose a data category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(DATASET_CATEGORIES).map(([key, category]) => (
+                                                <SelectItem key={key} value={key}>
+                                                    <div className="flex items-center">
+                                                        <span className="mr-2">{category.icon}</span>
+                                                        {category.name}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                                
-                                {dataset.hasTransactionType && (
-                                    <div className="space-y-2">
-                                        <Label>Transaction Type</Label>
-                                        <TransactionTypeSelector
-                                            value={selection.criteria.transactionType || 'all'}
-                                            onChange={(value) => updateDatasetCriteria(selection.id, 'transactionType', value)}
-                                        />
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Label>Specific Dataset *</Label>
+                                        {dataset && (
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger>
+                                                        <Info className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="max-w-xs">
+                                                        <div className="space-y-2">
+                                                            <p className="font-medium">{dataset.name}</p>
+                                                            <p className="text-sm">{dataset.description}</p>
+                                                            {dataset.fields && (
+                                                                <div>
+                                                                    <p className="text-sm font-medium">Available Fields:</p>
+                                                                    <p className="text-xs text-gray-600">
+                                                                        {dataset.fields.slice(0, 5).join(', ')}
+                                                                        {dataset.fields.length > 5 && ` and ${dataset.fields.length - 5} more...`}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        )}
                                     </div>
-                                )}
-
-                                
-                                {dataset.hasLandUse && (
-                                    <div className="space-y-2">
-                                        <Label>Land Use Type *</Label>
-                                        <Select
-                                            value={selection.criteria.landUse || ''}
-                                            onValueChange={(value) => updateDatasetCriteria(selection.id, 'landUse', value)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select land use type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {LAND_USE_TYPES.map(type => (
-                                                    <SelectItem key={type.value} value={type.value}>
-                                                        {type.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-
-                                
-                                {dataset.hasSizeRange && (
-                                    <div className="space-y-2">
-                                        <Label>Size Range (hectares)</Label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                value={selection.criteria.minSize || ''}
-                                                onChange={(e) => updateDatasetCriteria(selection.id, 'minSize', e.target.value)}
-                                                placeholder="Min size"
-                                            />
-                                            <Input
-                                                type="number"
-                                                step="0.01"
-                                                value={selection.criteria.maxSize || ''}
-                                                onChange={(e) => updateDatasetCriteria(selection.id, 'maxSize', e.target.value)}
-                                                placeholder="Max size"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                
-                                {dataset.hasUserLevel && (
-                                    <div className="space-y-2">
-                                        <Label>User ID *</Label>
-                                        <Input
-                                            value={selection.criteria.userId || ''}
-                                            onChange={(e) => updateDatasetCriteria(selection.id, 'userId', e.target.value)}
-                                            placeholder="Enter user ID"
-                                        />
-                                    </div>
-                                )}
+                                    <Select
+                                        value={selection.type}
+                                        onValueChange={(value) => updateDatasetSelection(selection.id, 'type', value)}
+                                        disabled={!selection.category}
+                                    >
+                                        <SelectTrigger className="max-w-64 overflow-x-clip">
+                                            <SelectValue placeholder="Select specific dataset" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {selection.category && DATASET_CATEGORIES[selection.category as keyof typeof DATASET_CATEGORIES]?.datasets.map(dataset => (
+                                                <SelectItem key={dataset.id} value={dataset.id}>
+                                                    <div>
+                                                        <div className="font-medium">{dataset.name}</div>
+                                                        <div className="text-xs text-gray-500 truncate">{dataset.description}</div>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
 
                             
-                            <div className="space-y-4">
-                                
-                                {dataset.requiresUpi && (
-                                    <div className="space-y-2">
-                                        <Label>UPI List *</Label>
-                                        <Textarea
-                                            value={selection.criteria.upi || ''}
-                                            onChange={(e) => updateDatasetCriteria(selection.id, 'upi', e.target.value)}
-                                            placeholder="Enter UPIs separated by commas or new lines (e.g., 3/01/11/01/88, 3/01/11/01/89)"
-                                            rows={3}
-                                        />
-                                        <p className="text-sm text-muted-foreground">
-                                            At least one UPI is required for shapefile generation
-                                        </p>
-                                    </div>
-                                )}
+                            {dataset && <DatasetPreview dataset={dataset} />}
 
-                                
-                                {dataset.requiresUpiList && (
-                                    <div className="space-y-2">
-                                        <Label>UPI List *</Label>
-                                        <Textarea
-                                            value={selection.criteria.upiList || ''}
-                                            onChange={(e) => updateDatasetCriteria(selection.id, 'upiList', e.target.value)}
-                                            placeholder="Enter UPIs separated by commas or new lines"
-                                            rows={4}
-                                        />
-                                        <p className="text-sm text-muted-foreground">
-                                            Upload a CSV file with UPIs or enter them manually
-                                        </p>
+                            
+                            {dataset && (
+                                <div className="space-y-6 p-4 bg-gray-50 rounded-lg border">
+                                    <div className="flex items-center">
+                                        <Filter className="h-4 w-4 mr-2 text-primary" />
+                                        <h4 className="font-medium text-gray-900">Dataset Configuration</h4>
                                     </div>
-                                )}
 
-                                
-                                {dataset.requiresIdList && (
-                                    <div className="space-y-2">
-                                        <Label>National ID List *</Label>
-                                        <Textarea
-                                            value={selection.criteria.idList || ''}
-                                            onChange={(e) => updateDatasetCriteria(selection.id, 'idList', e.target.value)}
-                                            placeholder="Enter National IDs separated by commas or new lines"
-                                            rows={4}
-                                        />
-                                        <p className="text-sm text-muted-foreground">
-                                            Upload a CSV file with IDs or enter them manually
-                                        </p>
-                                    </div>
-                                )}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        
+                                        {dataset.hasAdminLevel && (
+                                            <div className="md:col-span-2">
+                                                <AdministrativeLevelSelector
+                                                    value={selection.criteria.administrativeSelection || {
+                                                        provinces: [],
+                                                        districts: [],
+                                                        sectors: [],
+                                                        cells: [],
+                                                        villages: [],
+                                                    }}
+                                                    onChange={(adminSelection) => updateDatasetCriteria(selection.id, 'administrativeSelection', adminSelection)}
+                                                />
+                                            </div>
+                                        )}
 
-                                
-                                {dataset.requiresPeriod && (
-                                    <div className="space-y-2">
-                                        <Label>Date Period *</Label>
-                                        <DateRangePicker
-                                            dateRange={selection.criteria.dateRange}
-                                            onDateRangeChange={(range) => updateDatasetCriteria(selection.id, 'dateRange', range)}
-                                        />
-                                    </div>
-                                )}
+                                        
+                                        {dataset.hasTransactionType && (
+                                            <div className="space-y-2">
+                                                <Label>Transaction Types</Label>
+                                                <MultiSelectDropdown
+                                                    options={TRANSACTION_TYPES}
+                                                    selectedValues={selection.criteria.transactionTypes || []}
+                                                    onSelectionChange={(selected) => updateDatasetCriteria(selection.id, 'transactionTypes', selected)}
+                                                    placeholder="Select transaction types"
+                                                />
+                                            </div>
+                                        )}
 
-                                
-                                {dataset.fields && (
-                                    <div className="space-y-2">
-                                        <Label className="text-sm font-medium text-muted-foreground">Available Fields</Label>
-                                        <div className="flex flex-wrap gap-1">
-                                            {dataset.fields.map((field, idx) => (
-                                                <Badge key={idx} variant="secondary" className="text-xs">
-                                                    {field}
-                                                </Badge>
-                                            ))}
-                                        </div>
+                                        
+                                        {dataset.hasLandUse && (
+                                            <div className="space-y-2">
+                                                <Label>Land Use Types</Label>
+                                                <MultiSelectDropdown
+                                                    options={LAND_USE_TYPES}
+                                                    selectedValues={selection.criteria.landUseTypes || []}
+                                                    onSelectionChange={(selected) => updateDatasetCriteria(selection.id, 'landUseTypes', selected)}
+                                                    placeholder="Select land use types"
+                                                />
+                                            </div>
+                                        )}
+
+                                        
+                                        {dataset.hasSizeRange && (
+                                            <div className="space-y-2">
+                                                <Label>Size Range (hectares)</Label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={selection.criteria.minSize || ''}
+                                                        onChange={(e) => updateDatasetCriteria(selection.id, 'minSize', e.target.value)}
+                                                        placeholder="Min size"
+                                                    />
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={selection.criteria.maxSize || ''}
+                                                        onChange={(e) => updateDatasetCriteria(selection.id, 'maxSize', e.target.value)}
+                                                        placeholder="Max size"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        
+                                        {dataset.hasUserLevel && (
+                                            <div className="space-y-2">
+                                                <Label>User ID *</Label>
+                                                <Input
+                                                    value={selection.criteria.userId || ''}
+                                                    onChange={(e) => updateDatasetCriteria(selection.id, 'userId', e.target.value)}
+                                                    placeholder="Enter user ID"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </CardContent>
+
+                                    
+                                    <div className="space-y-4">
+                                        
+                                        {dataset.requiresPeriod && (
+                                            <div className="space-y-2">
+                                                <Label>Date Period *</Label>
+                                                <DateRangePicker
+                                                    dateRange={selection.criteria.dateRange}
+                                                    onDateRangeChange={(range) => updateDatasetCriteria(selection.id, 'dateRange', range)}
+                                                />
+                                            </div>
+                                        )}
+
+                                        
+                                        {(dataset.requiresUpi || dataset.requiresUpiList) && (
+                                            <div className="space-y-2">
+                                                <Label>UPI List *</Label>
+                                                <UpiInput
+                                                    value={selection.criteria.upiList || []}
+                                                    onChange={(upis) => updateDatasetCriteria(selection.id, 'upiList', upis)}
+                                                    placeholder="Enter UPI (e.g., 3/01/11/01/88)"
+                                                />
+                                                {dataset.requiresUpi && (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        At least one UPI is required for shapefile generation
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        
+                                        {dataset.requiresIdList && (
+                                            <div className="space-y-2">
+                                                <Label>National ID List *</Label>
+                                                <UpiInput
+                                                    value={selection.criteria.idList || []}
+                                                    onChange={(ids) => updateDatasetCriteria(selection.id, 'idList', ids)}
+                                                    placeholder="Enter National ID"
+                                                />
+                                                <p className="text-sm text-muted-foreground">
+                                                    Upload a CSV file with IDs or enter them manually
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </CollapsibleContent>
+                </Collapsible>
             </Card>
         )
     }
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(event.target.files || [])
-        setUploadedFiles(prev => [...prev, ...files])
+        const filesWithCategory = files.map(file => ({
+            file,
+            category: 'other' as const
+        }))
+        setUploadedFiles(prev => [...prev, ...filesWithCategory])
     }
 
     const removeFile = (index: number) => {
         setUploadedFiles(prev => prev.filter((_, i) => i !== index))
     }
 
+    const updateFileCategory = (index: number, category: 'verification' | 'research' | 'authorization' | 'other') => {
+        setUploadedFiles(prev =>
+            prev.map((fileObj, i) =>
+                i === index ? { ...fileObj, category } : fileObj
+            )
+        )
+    }
+
     const getRequiredDocuments = () => {
         if (!isExternal) {
             return [
-                'Authorization letter from supervisor/department head',
-                'Project documentation (if applicable)'
+                { text: 'Authorization letter from supervisor/department head', category: 'authorization' },
+                { text: 'Project documentation (if applicable)', category: 'research' }
             ]
         }
 
         const required = []
 
         if (formData.applicantType === 'individual') {
-            required.push('National ID or Passport')
+            required.push({ text: 'National ID or Passport', category: 'verification' })
         } else {
-            required.push('Organization registration certificate')
-            required.push('Authorization letter from organization')
+            required.push({ text: 'Organization registration certificate', category: 'verification' })
+            required.push({ text: 'Authorization letter from organization', category: 'authorization' })
         }
 
-        required.push('Research proposal or project documentation')
+        required.push({ text: 'Research proposal or project documentation', category: 'research' })
 
         return required
     }
@@ -404,8 +591,13 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                 return false
             }
 
-            if (dataset?.requiresUpi && !selection.criteria.upi?.trim()) {
-                toast.error('Please provide at least one UPI for shapefile datasets')
+            if ((dataset?.requiresUpi || dataset?.requiresUpiList) && (!selection.criteria.upiList || selection.criteria.upiList.length === 0)) {
+                toast.error('Please provide at least one UPI for datasets that require it')
+                return false
+            }
+
+            if (dataset?.requiresIdList && (!selection.criteria.idList || selection.criteria.idList.length === 0)) {
+                toast.error('Please provide at least one National ID for datasets that require it')
                 return false
             }
         }
@@ -441,10 +633,10 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     }
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6">
             
             <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                     {mode === 'create' ? 'Create New Data Request' : 'Edit Data Request'}
                 </h1>
                 <p className="text-gray-600">
@@ -545,7 +737,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                     type="button"
                                     variant="outline"
                                     onClick={addDatasetSelection}
-                                    className="w-full border-dashed border-2 h-12"
+                                    className="w-full border-dashed border-2"
                                 >
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Another Dataset
@@ -566,12 +758,18 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                     <CardContent className="space-y-6">
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex items-start space-x-2">
-                                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                                 <div>
                                     <h4 className="font-medium text-blue-900">Required Documents</h4>
                                     <ul className="mt-2 space-y-1">
                                         {getRequiredDocuments().map((doc, idx) => (
-                                            <li key={idx} className="text-sm text-blue-800">• {doc}</li>
+                                            <li key={idx} className="text-sm text-blue-800 flex items-center">
+                                                <span className="w-2 h-2 bg-blue-600 rounded-full mr-2 flex-shrink-0"></span>
+                                                <span className="flex-1">{doc.text}</span>
+                                                <Badge variant="outline" className="ml-2 text-xs">
+                                                    {doc.category}
+                                                </Badge>
+                                            </li>
                                         ))}
                                     </ul>
                                 </div>
@@ -593,7 +791,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                     type="button"
                                     variant="outline"
                                     onClick={() => document.getElementById('file-upload')?.click()}
-                                    className="w-full h-20 border-dashed border-2"
+                                    className="w-full h-20 border-dashed border-2 hover:bg-gray-50 transition-colors"
                                 >
                                     <div className="flex flex-col items-center">
                                         <Upload className="h-6 w-6 mb-2" />
@@ -606,27 +804,46 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
                         {uploadedFiles.length > 0 && (
                             <div className="space-y-2">
-                                <Label>Uploaded Files</Label>
-                                <div className="space-y-2">
-                                    {uploadedFiles.map((file, idx) => (
+                                <Label>Uploaded Files ({uploadedFiles.length})</Label>
+                                <div className="space-y-3 max-h-60 overflow-y-auto">
+                                    {uploadedFiles.map((fileObj, idx) => (
                                         <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                                            <div className="flex items-center space-x-3">
-                                                <FileText className="h-5 w-5 text-gray-400" />
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                                <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium text-gray-900 truncate">{fileObj.file.name}</p>
                                                     <p className="text-xs text-gray-500">
-                                                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                        {(fileObj.file.size / 1024 / 1024).toFixed(2)} MB
                                                     </p>
                                                 </div>
                                             </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => removeFile(idx)}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center space-x-2 flex-shrink-0">
+                                                <Select
+                                                    value={fileObj.category}
+                                                    onValueChange={(value: 'verification' | 'research' | 'authorization' | 'other') =>
+                                                        updateFileCategory(idx, value)
+                                                    }
+                                                >
+                                                    <SelectTrigger className="w-32">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="verification">Verification</SelectItem>
+                                                        <SelectItem value="research">Research</SelectItem>
+                                                        <SelectItem value="authorization">Authorization</SelectItem>
+                                                        <SelectItem value="other">Other</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => removeFile(idx)}
+                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -636,19 +853,24 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                 </Card>
 
                 
-                <div className="flex justify-end space-x-4 pb-8">
+                <div className="flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4 pb-8">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => router.back()}
                         disabled={isSubmitting}
+                        className="w-full sm:w-auto"
                     >
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full sm:w-auto "
+                    >
                         {isSubmitting ? (
                             <>
-                                <div className="animate-spin rounded-full border-b-2 border-white mr-2"></div>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                 {mode === 'create' ? 'Creating Request...' : 'Updating Request...'}
                             </>
                         ) : (
@@ -658,60 +880,5 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                 </div>
             </form>
         </div>
-    )
-}
-
-interface TransactionTypeSelectorProps {
-    value: string
-    onChange: (value: string) => void
-}
-
-function TransactionTypeSelector({ value, onChange }: TransactionTypeSelectorProps) {
-    const [open, setOpen] = useState(false)
-
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className="w-full justify-between"
-                >
-                    {value
-                        ? TRANSACTION_TYPES.find((type) => type.value === value)?.label
-                        : "Select transaction type..."}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0">
-                <Command>
-                    <CommandInput placeholder="Search transaction types..." />
-                    <CommandEmpty>No transaction type found.</CommandEmpty>
-                    <CommandGroup>
-                        <CommandList className="max-h-60 overflow-auto">
-                            {TRANSACTION_TYPES.map((type) => (
-                                <CommandItem
-                                    key={type.value}
-                                    value={type.value}
-                                    onSelect={(currentValue) => {
-                                        onChange(currentValue === value ? "" : currentValue)
-                                        setOpen(false)
-                                    }}
-                                >
-                                    <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value === type.value ? "opacity-100" : "opacity-0"
-                                        )}
-                                    />
-                                    {type.label}
-                                </CommandItem>
-                            ))}
-                        </CommandList>
-                    </CommandGroup>
-                </Command>
-            </PopoverContent>
-        </Popover>
     )
 }
