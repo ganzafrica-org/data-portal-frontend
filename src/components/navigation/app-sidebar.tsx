@@ -23,6 +23,7 @@ import {
     useSidebar
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 function AppHeader() {
     const { setOpenMobile, isMobile } = useSidebar()
@@ -34,14 +35,13 @@ function AppHeader() {
                     size="lg"
                     className="cursor-default hover:bg-transparent data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-white text-primary">
-                        <FileText className="h-5 w-5" />
-                    </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold text-white">
-              NLA Data Portal
-            </span>
-                    </div>
+                    <Image
+                        src="/images/logo.png"
+                        alt="NLA Logo"
+                        width={100}
+                        height={100}
+                        className="object-contain"
+                    />
                     {isMobile && (
                         <Button
                             variant="ghost"
@@ -85,18 +85,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar
             collapsible="icon"
             variant="sidebar"
-            className="bg-blue border-r-0"
+            className="bg-green border-r-0"
             {...props}
         >
-            <SidebarHeader className="bg-blue">
+            <SidebarHeader className="bg-green">
                 <AppHeader />
             </SidebarHeader>
 
-            <SidebarContent className="bg-blue">
+            <SidebarContent className="bg-green">
                 <NavMain items={navItems} />
             </SidebarContent>
 
-            <SidebarFooter className="bg-blue">
+            <SidebarFooter className="bg-green">
                 <NavUser onSignOut={logout} />
             </SidebarFooter>
 

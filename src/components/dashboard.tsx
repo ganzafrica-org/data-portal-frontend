@@ -87,11 +87,11 @@ export default function Dashboard() {
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'pending':
-                return <Clock className="h-4 w-4" />
+                return <Clock className="h-4 w-4 text-yellow" />
             case 'approved':
-                return <CheckCircle className="h-4 w-4" />
+                return <CheckCircle className="h-4 w-4 text-green" />
             case 'rejected':
-                return <XCircle className="h-4 w-4" />
+                return <XCircle className="h-4 w-4 text-red-500" />
             default:
                 return <FileText className="h-4 w-4" />
         }
@@ -115,32 +115,36 @@ export default function Dashboard() {
             {
                 title: "Total Requests",
                 value: stats.totalRequests,
-                icon: <FileText className="h-4 w-4 text-blue" />,
+                icon: <FileText className="h-6 w-6 text-white" />,
                 description: stats.showSystemStats ? "All data requests" : "Your requests",
-                textColor: "text-blue"
+                bgColor: "bg-blue",
+                iconBg: "bg-blue/80"
             },
             {
                 title: stats.showSystemStats ? "Pending Approval" : "Pending",
                 value: stats.pendingRequests,
                 icon: hasPermission('canApproveRequests')
-                    ? <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    : <Clock className="h-4 w-4 text-yellow-600" />,
+                    ? <AlertCircle className="h-6 w-6 text-green" />
+                    : <Clock className="h-6 w-6 text-green" />,
                 description: stats.showSystemStats ? "Need attention" : "Awaiting approval",
-                textColor: "text-yellow-600"
+                bgColor: "bg-yellow",
+                iconBg: "bg-yellow/80"
             },
             {
                 title: "Approved",
                 value: stats.approvedRequests,
-                icon: <CheckCircle className="h-4 w-4 text-green-600" />,
+                icon: <CheckCircle className="h-6 w-6 text-white" />,
                 description: stats.showSystemStats ? "Processed requests" : "Ready for download",
-                textColor: "text-green-600"
+                bgColor: "bg-green",
+                iconBg: "bg-green/80"
             },
             {
                 title: "Rejected",
                 value: stats.rejectedRequests,
-                icon: <XCircle className="h-4 w-4 text-red-600" />,
+                icon: <XCircle className="h-6 w-6 text-white" />,
                 description: stats.showSystemStats ? "Declined requests" : "Need attention",
-                textColor: "text-red-600"
+                bgColor: "bg-red-500",
+                iconBg: "bg-red-600"
             }
         ]
 
@@ -148,35 +152,29 @@ export default function Dashboard() {
             baseCards[3] = {
                 title: "Total Users",
                 value: stats.totalUsers!,
-                icon: <Users className="h-4 w-4 text-muted-foreground" />,
+                icon: <Users className="h-6 w-6 text-white" />,
                 description: `${stats.externalUsers} external, ${stats.totalUsers! - stats.externalUsers!} internal`,
-                textColor: "text-blue"
+                bgColor: "bg-blue",
+                iconBg: "bg-blue/80"
             }
         }
 
         return baseCards.map((card, index) => (
-            <Card key={index} className={`${
-                index === 0
-                    ? 'bg-blue-100'
-                    : index === 1
-                        ? 'bg-yellow-100'
-                        : index === 2
-                            ? 'bg-green-100'
-                            : index === 3
-                                ? 'bg-purple-100'
-                                : 'bg-pink-100'
-            }`}>
+            <Card key={index} className={`${card.bgColor} p-4 text-white relative overflow-hidden`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
                     {card.icon}
                 </CardHeader>
                 <CardContent>
-                    <div className={`text-2xl font-bold ${card.textColor || ''}`}>
+                    <p className={`text-2xl font-bold ${card.bgColor === 'bg-yellow' ? 'text-green' : 'text-white'}`}>
                         {card.value}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
+                    </p>
+                    <p className={`text-xs ${card.bgColor === 'bg-yellow' ? 'text-green' : 'text-white'}`}>
                         {card.description}
                     </p>
+                    <div className="absolute top-0 right-0 w-20 h-20 opacity-10">
+                        <div className="w-full h-full bg-white rounded-full -translate-y-10 translate-x-10"></div>
+                    </div>
                 </CardContent>
             </Card>
         ))
@@ -199,11 +197,11 @@ export default function Dashboard() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-green/50 to-yellow/20 rounded-lg p-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <div className="bg-green rounded-lg p-6  relative overflow-hidden">
+                <h1 className="text-2xl font-bold text-white mb-2">
                     {welcomeMessage.title}
                 </h1>
-                <p className="text-gray-600 mb-4">
+                <p className="text-yellow mb-4">
                     {welcomeMessage.subtitle}
                 </p>
                 {(user.role === 'internal' || user.role === 'external') && (
@@ -214,6 +212,13 @@ export default function Dashboard() {
                         </Link>
                     </Button>
                 )}
+
+                <div className="absolute top-0 right-0 w-32 h-32 opacity-20">
+                    <div className="w-full h-full bg-white rounded-full -translate-y-16 translate-x-16"></div>
+                </div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 opacity-10">
+                    <div className="w-full h-full bg-white rounded-full translate-y-12 -translate-x-12"></div>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -228,7 +233,7 @@ export default function Dashboard() {
                             {requestsCardInfo.description}
                         </CardDescription>
                     </div>
-                    <Button variant="outline" asChild>
+                    <Button asChild>
                         <Link href="/requests">
                             View All
                             <ArrowRight className="h-4 w-4 ml-2" />
