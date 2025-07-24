@@ -10,11 +10,9 @@ import {
 } from "lucide-react";
 
 import { NavMain } from "@/components/navigation/nav-main"
-import { NavUser } from "@/components/navigation/nav-user"
 import {
     Sidebar,
     SidebarContent,
-    SidebarFooter,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
@@ -62,7 +60,7 @@ function AppHeader() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-    const { user, logout } = useAuth()
+    const { user } = useAuth()
 
     if (!user) return null
 
@@ -95,10 +93,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarContent className="bg-green">
                 <NavMain items={navItems} />
             </SidebarContent>
-
-            <SidebarFooter className="bg-green">
-                <NavUser onSignOut={logout} />
-            </SidebarFooter>
 
             <SidebarRail />
         </Sidebar>
