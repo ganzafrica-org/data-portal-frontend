@@ -6,6 +6,8 @@ import {
     LayoutDashboard,
     FileText,
     Users,
+    Database,
+    BarChart3,
     X
 } from "lucide-react";
 
@@ -36,8 +38,8 @@ function AppHeader() {
                     <Image
                         src="/images/logo.png"
                         alt="NLA Logo"
-                        width={100}
-                        height={100}
+                        width={110}
+                        height={110}
                         className="object-contain"
                     />
                     {isMobile && (
@@ -60,7 +62,7 @@ function AppHeader() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-    const { user } = useAuth()
+    const { user, hasPermission } = useAuth()
 
     if (!user) return null
 
@@ -71,7 +73,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ]
 
         if (user.role === 'admin') {
-            baseItems.push({ title: "Users", url: "/users", icon: Users })
+            baseItems.push(
+                { title: "Users", url: "/users", icon: Users },
+                { title: "Dataset Config", url: "/configuration", icon: Database },
+                { title: "Analytics", url: "/analytics", icon: BarChart3 }
+            )
+        } else if (hasPermission('canViewAnalytics')) {
+
+            baseItems.push({ title: "Analytics", url: "/analytics", icon: BarChart3 })
         }
 
         return baseItems

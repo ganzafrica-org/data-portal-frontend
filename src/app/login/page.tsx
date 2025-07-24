@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Loader2, Eye, EyeOff, User, Building } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -37,9 +38,46 @@ export default function LoginPage() {
         }
     }
 
+    const demoAccounts = [
+        {
+            type: 'Individual Researcher',
+            email: 'john.mukiza@researcher.com',
+            role: 'External',
+            icon: <User className="h-4 w-4" />,
+            color: 'bg-blue-100 text-blue-800'
+        },
+        {
+            type: 'Academic Institution',
+            email: 'sarah.johnson@university.edu',
+            role: 'External',
+            icon: <Building className="h-4 w-4" />,
+            color: 'bg-purple-100 text-purple-800'
+        },
+        {
+            type: 'Private Company',
+            email: 'david.smith@consultancy.com',
+            role: 'External',
+            icon: <Building className="h-4 w-4" />,
+            color: 'bg-orange-100 text-orange-800'
+        },
+        {
+            type: 'NLA Employee',
+            email: 'marie.uwimana@nla.gov.rw',
+            role: 'Internal',
+            icon: <User className="h-4 w-4" />,
+            color: 'bg-green-100 text-green-800'
+        },
+        {
+            type: 'NLA Admin',
+            email: 'admin@nla.gov.rw',
+            role: 'Admin',
+            icon: <User className="h-4 w-4" />,
+            color: 'bg-red-100 text-red-800'
+        }
+    ]
+
     return (
         <div className="min-h-screen relative overflow-hidden">
-            
             <Image
                 src="/images/login.png"
                 alt="Rwanda landscape"
@@ -48,19 +86,16 @@ export default function LoginPage() {
                 priority
             />
 
-            
             <div className="absolute inset-0 bg-black/30" />
 
-            
             <div className="relative z-10 min-h-screen flex">
-                
-                <div className="hidden md:flex md:w-1/2 lg:w-2/5 xl:w-1/3 flex-col justify-center items-start p-8 lg:p-16">
+                <div className="hidden md:flex md:w-1/2 lg:w-2/5 xl:w-1/3 flex-col justify-center items-start p-8 lg:p-10">
                     <div className="flex items-center mb-8">
                         <Image
                             src="/images/favicon.png"
                             alt="NLA Logo"
-                            width={60}
-                            height={60}
+                            width={100}
+                            height={100}
                             className="object-contain"
                         />
                         <div className="text-white">
@@ -70,12 +105,12 @@ export default function LoginPage() {
                     </div>
 
                     <div className="text-white max-w-lg">
-                        <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">
+                        <h2 className="text-2xl lg:text-4xl font-bold mb-6 leading-tight">
                             ACCESS RWANDA&#39;S<br />
                             <span className="text-blue">LAND DATA</span>
                         </h2>
-                        <p className=" lg:text-lg opacity-90 mb-8">
-                            Secure and comprehensive access to national land administration data for authorized users.
+                        <p className="lg:text-lg opacity-90 mb-8">
+                            Secure and comprehensive access to national land administration data for authorized users across various sectors.
                         </p>
                         <div className="flex items-center space-x-6 text-xs">
                             <div className="flex items-center">
@@ -94,10 +129,8 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                
                 <div className="w-full md:w-1/2 lg:w-3/5 xl:w-2/3 flex items-center justify-center p-4 md:p-8">
                     <div className="w-full max-w-lg">
-                        
                         <div className="md:hidden text-center mb-6">
                             <div className="flex justify-center items-center mb-4">
                                 <Image
@@ -116,14 +149,14 @@ export default function LoginPage() {
 
                         <Card className="bg-white border-0">
                             <CardHeader className="text-center pb-2">
-                                <CardTitle className="text-xl font-boldtext-gray-900">
+                                <CardTitle className="text-xl font-bold text-gray-900">
                                     Sign In
                                 </CardTitle>
                                 <CardDescription className="text-gray-600">
                                     Enter your credentials to access the portal
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-2">
+                            <CardContent className="space-y-4">
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="email" className="text-gray-700 text-sm">
@@ -192,12 +225,13 @@ export default function LoginPage() {
                                     OR
                                 </div>
 
-                                <div className="flex flex-col space-y-1">
-                                    <Link href="/register" >
+                                <div className="flex flex-col space-y-2">
+                                    <Link href="/register">
                                         <Button
                                             variant="outline"
                                             className="w-full border-blue text-blue hover:text-white hover:bg-blue"
                                         >
+                                            <User className="h-4 w-4 mr-2" />
                                             Register as External User
                                         </Button>
                                     </Link>
@@ -206,19 +240,37 @@ export default function LoginPage() {
                                             variant="outline"
                                             className="w-full border-green text-green hover:text-white hover:bg-green"
                                         >
+                                            <Building className="h-4 w-4 mr-2" />
                                             Register as Employee
                                         </Button>
                                     </Link>
                                 </div>
 
-                                
-                                <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
-                                    <p className="font-medium mb-2 text-gray-700">Demo Credentials:</p>
-                                    <div className="space-y-1 text-gray-600">
-                                        <div>External: john.mukiza@researcher.com</div>
-                                        <div>Internal: marie.uwimana@nla.gov.rw</div>
-                                        <div>Admin: admin@nla.gov.rw</div>
-                                        <div>Password: password</div>
+                                {/* Demo Credentials */}
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                                    <h4 className="font-medium mb-3 text-gray-900">Demo Accounts</h4>
+                                    <div className="space-y-2">
+                                        {demoAccounts.map((account, index) => (
+                                            <div key={index} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
+                                                <div className="flex items-center space-x-2">
+                                                    {account.icon}
+                                                    <span className="font-medium text-gray-700">{account.type}</span>
+                                                    <Badge className={account.color} variant="outline">
+                                                        {account.role}
+                                                    </Badge>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setEmail(account.email)
+                                                        setPassword("password")
+                                                    }}
+                                                    className="text-blue hover:underline"
+                                                >
+                                                    Use
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </CardContent>

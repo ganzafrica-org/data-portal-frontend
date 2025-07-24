@@ -20,7 +20,6 @@ export interface DataRequest {
         type: string
         category: 'verification' | 'research' | 'authorization' | 'other'
     }[]
-    applicantType: 'individual' | 'organization' | 'company'
     adminNotes?: string
     approvedBy?: string
     rejectionReason?: string
@@ -31,16 +30,32 @@ export interface User {
     name: string
     email: string
     role: 'external' | 'internal' | 'admin'
+    userType: 'individual' | 'academic_institution' | 'research_organization' | 'private_company' | 'ngo' | 'government_agency' | 'international_organization' | 'employee'
+    organizationName?: string
+    organizationEmail?: string
     dateJoined: string
+    isVerified: boolean
     permissions: {
         canViewAllRequests: boolean
         canApproveRequests: boolean
         canManageUsers: boolean
         canViewAuditTrail: boolean
         canExportData: boolean
+        canConfigureDatasets: boolean
+        canViewAnalytics: boolean
         requiresApproval: boolean
     }
 }
+
+export const USER_TYPES = [
+    { value: 'individual', label: 'Individual Researcher', description: 'Independent researcher or student' },
+    { value: 'academic_institution', label: 'Academic Institution', description: 'University, college, or academic research center' },
+    { value: 'research_organization', label: 'Research Organization', description: 'Research institute or think tank' },
+    { value: 'private_company', label: 'Private Company', description: 'Commercial enterprise or consulting firm' },
+    { value: 'ngo', label: 'NGO/Non-Profit', description: 'Non-governmental organization or non-profit' },
+    { value: 'government_agency', label: 'Government Agency', description: 'Government department or public institution' },
+    { value: 'international_organization', label: 'International Organization', description: 'UN agencies, World Bank, etc.' }
+]
 
 export const DUMMY_USERS: User[] = [
     {
@@ -48,13 +63,17 @@ export const DUMMY_USERS: User[] = [
         name: 'John Mukiza',
         email: 'john.mukiza@researcher.com',
         role: 'external',
+        userType: 'individual',
         dateJoined: '2024-01-15',
+        isVerified: true,
         permissions: {
             canViewAllRequests: false,
             canApproveRequests: false,
             canManageUsers: false,
             canViewAuditTrail: false,
             canExportData: false,
+            canConfigureDatasets: false,
+            canViewAnalytics: false,
             requiresApproval: true
         }
     },
@@ -63,13 +82,17 @@ export const DUMMY_USERS: User[] = [
         name: 'Marie Uwimana',
         email: 'marie.uwimana@nla.gov.rw',
         role: 'internal',
+        userType: 'employee',
         dateJoined: '2023-06-10',
+        isVerified: true,
         permissions: {
             canViewAllRequests: true,
             canApproveRequests: false,
             canManageUsers: false,
             canViewAuditTrail: true,
             canExportData: true,
+            canConfigureDatasets: false,
+            canViewAnalytics: false,
             requiresApproval: true
         }
     },
@@ -78,13 +101,17 @@ export const DUMMY_USERS: User[] = [
         name: 'Admin User',
         email: 'admin@nla.gov.rw',
         role: 'admin',
+        userType: 'employee',
         dateJoined: '2023-01-01',
+        isVerified: true,
         permissions: {
             canViewAllRequests: true,
             canApproveRequests: true,
             canManageUsers: true,
             canViewAuditTrail: true,
             canExportData: true,
+            canConfigureDatasets: true,
+            canViewAnalytics: true,
             requiresApproval: false
         }
     },
@@ -93,14 +120,60 @@ export const DUMMY_USERS: User[] = [
         name: 'Peter Nzeyimana',
         email: 'peter.nzeyimana@nla.gov.rw',
         role: 'internal',
+        userType: 'employee',
         dateJoined: '2023-08-20',
+        isVerified: true,
         permissions: {
             canViewAllRequests: false,
             canApproveRequests: true,
             canManageUsers: false,
             canViewAuditTrail: true,
             canExportData: true,
+            canConfigureDatasets: false,
+            canViewAnalytics: false,
             requiresApproval: false
+        }
+    },
+    {
+        id: '5',
+        name: 'Sarah Johnson',
+        email: 'sarah.johnson@university.edu',
+        role: 'external',
+        userType: 'academic_institution',
+        organizationName: 'University of Rwanda',
+        organizationEmail: 'research@ur.ac.rw',
+        dateJoined: '2024-02-20',
+        isVerified: true,
+        permissions: {
+            canViewAllRequests: false,
+            canApproveRequests: false,
+            canManageUsers: false,
+            canViewAuditTrail: false,
+            canExportData: false,
+            canConfigureDatasets: false,
+            canViewAnalytics: false,
+            requiresApproval: true
+        }
+    },
+    {
+        id: '6',
+        name: 'David Smith',
+        email: 'david.smith@consultancy.com',
+        role: 'external',
+        userType: 'private_company',
+        organizationName: 'Land Consultancy Ltd',
+        organizationEmail: 'info@consultancy.com',
+        dateJoined: '2024-03-10',
+        isVerified: false,
+        permissions: {
+            canViewAllRequests: false,
+            canApproveRequests: false,
+            canManageUsers: false,
+            canViewAuditTrail: false,
+            canExportData: false,
+            canConfigureDatasets: false,
+            canViewAnalytics: false,
+            requiresApproval: true
         }
     }
 ]
@@ -125,8 +198,7 @@ export const DUMMY_REQUESTS: DataRequest[] = [
             { name: 'national_id.pdf', size: '1.2 MB', type: 'PDF', category: 'verification' },
             { name: 'research_proposal.pdf', size: '2.3 MB', type: 'PDF', category: 'research' },
             { name: 'ethics_approval.pdf', size: '1.1 MB', type: 'PDF', category: 'research' }
-        ],
-        applicantType: 'individual'
+        ]
     },
     {
         id: '2',
@@ -147,7 +219,6 @@ export const DUMMY_REQUESTS: DataRequest[] = [
         supportingDocuments: [
             { name: 'authorization_letter.pdf', size: '900 KB', type: 'PDF', category: 'authorization' }
         ],
-        applicantType: 'organization',
         approvedBy: 'Admin User'
     },
     {
@@ -170,16 +241,15 @@ export const DUMMY_REQUESTS: DataRequest[] = [
             { name: 'national_id.pdf', size: '1.2 MB', type: 'PDF', category: 'verification' },
             { name: 'research_outline.pdf', size: '800 KB', type: 'PDF', category: 'research' }
         ],
-        applicantType: 'individual',
         rejectionReason: 'Insufficient supporting documentation provided.'
     },
     {
         id: '4',
         title: 'Urban Planning Dataset',
         requestNumber: 'REQ-2024-004',
-        userId: '1',
-        userName: 'John Mukiza',
-        userEmail: 'john.mukiza@researcher.com',
+        userId: '5',
+        userName: 'Sarah Johnson',
+        userEmail: 'sarah.johnson@university.edu',
         status: 'approved',
         dateCreated: '2024-11-20',
         dateUpdated: '2024-11-22',
@@ -190,10 +260,9 @@ export const DUMMY_REQUESTS: DataRequest[] = [
             to: '2024-10-31'
         },
         supportingDocuments: [
-            { name: 'national_id.pdf', size: '1.2 MB', type: 'PDF', category: 'verification' },
-            { name: 'university_letter.pdf', size: '1.5 MB', type: 'PDF', category: 'authorization' }
+            { name: 'university_authorization.pdf', size: '1.5 MB', type: 'PDF', category: 'authorization' },
+            { name: 'research_proposal.pdf', size: '2.1 MB', type: 'PDF', category: 'research' }
         ],
-        applicantType: 'individual',
         approvedBy: 'Peter Nzeyimana'
     },
     {
@@ -213,7 +282,6 @@ export const DUMMY_REQUESTS: DataRequest[] = [
         },
         supportingDocuments: [
             { name: 'project_approval.pdf', size: '1.8 MB', type: 'PDF', category: 'authorization' }
-        ],
-        applicantType: 'organization'
+        ]
     }
 ]

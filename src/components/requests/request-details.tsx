@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { CalendarDays, Download, Edit, FileText, CheckCircle, XCircle, Clock, User, Building, ArrowLeft } from "lucide-react"
+import { CalendarDays, Download, Edit, FileText, CheckCircle, XCircle, Clock, User, Building, ArrowLeft, Shield, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
-import { DataRequest } from "@/lib/data"
+import { DataRequest, DUMMY_USERS } from "@/lib/data"
 import { toast } from "sonner"
 
 interface RequestDetailsProps {
@@ -26,6 +26,8 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
     const canEdit = (user.id === request.userId && request.status === 'pending') || hasPermission('canApproveRequests')
     const canApprove = hasPermission('canApproveRequests') && request.status === 'pending'
     const isOwner = user.id === request.userId
+
+    const requester = DUMMY_USERS.find(u => u.id === request.userId)
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -66,6 +68,30 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
         }
     }
 
+    const getUserTypeLabel = (userType: string) => {
+        const labels = {
+            'individual': 'Individual Researcher',
+            'academic_institution': 'Academic Institution',
+            'research_organization': 'Research Organization',
+            'private_company': 'Private Company',
+            'ngo': 'NGO/Non-Profit',
+            'government_agency': 'Government Agency',
+            'international_organization': 'International Organization',
+            'employee': 'NLA Employee'
+        }
+        return labels[userType as keyof typeof labels] || userType
+    }
+
+    const getPriorityLevel = () => {
+
+        if (requester?.userType === 'government_agency') return { level: 'High', color: 'bg-red-100 text-red-800' }
+        if (requester?.userType === 'academic_institution') return { level: 'Medium', color: 'bg-yellow-100 text-yellow-800' }
+        if (requester?.role === 'internal') return { level: 'High', color: 'bg-red-100 text-red-800' }
+        return { level: 'Standard', color: 'bg-gray-100 text-gray-800' }
+    }
+
+    const priority = getPriorityLevel()
+
     const handleApprove = async () => {
         setIsProcessing(true)
         try {
@@ -87,10 +113,8 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
 
         setIsProcessing(true)
         try {
-
             await new Promise(resolve => setTimeout(resolve, 1500))
             toast.success('Request rejected')
-
         } catch (error: any) {
             toast.error('Failed to reject request')
             console.error('Error rejecting request:', error)
@@ -102,7 +126,6 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
     const handleUpdateNotes = async () => {
         setIsProcessing(true)
         try {
-
             await new Promise(resolve => setTimeout(resolve, 1000))
             toast.success('Notes updated successfully')
         } catch (error: any) {
@@ -115,7 +138,6 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
 
     return (
         <div className="max-w-full space-y-6">
-            
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <Button variant="ghost" size="sm" asChild>
@@ -134,13 +156,14 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                     <Badge className={getStatusColor(request.status)}>
                         {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                     </Badge>
+                    <Badge className={priority.color}>
+                        {priority.level} Priority
+                    </Badge>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                
-                <div className="lg:col-span-2 space-y-2">
-                    
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle>Request Details</CardTitle>
@@ -155,7 +178,9 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                                 <Label className="text-sm font-medium text-gray-500">REQUESTED DATASETS</Label>
                                 <div className="flex flex-wrap gap-2 mt-2">
                                     {request.requestedDatasets.map((dataset, idx) => (
-                                        <Badge key={idx} variant="outline">{dataset}</Badge>
+                                        <Badge key={idx} variant="outline" className="bg-blue-50 text-blue-700">
+                                            {dataset}
+                                        </Badge>
                                     ))}
                                 </div>
                             </div>
@@ -171,20 +196,29 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                             )}
 
                             <div>
-                                <Label className="text-sm font-medium text-gray-500">APPLICANT TYPE</Label>
+                                <Label className="text-sm font-medium text-gray-500">USER TYPE</Label>
                                 <div className="mt-1 flex items-center">
-                                    {request.applicantType === 'individual' ? (
-                                        <User className="h-4 w-4 mr-2" />
+                                    {requester?.userType === 'individual' || requester?.userType === 'employee' ? (
+                                        <User className="h-4 w-4 mr-2 text-blue-600" />
                                     ) : (
-                                        <Building className="h-4 w-4 mr-2" />
+                                        <Building className="h-4 w-4 mr-2 text-green-600" />
                                     )}
-                                    <span className="capitalize text-gray-900">{request.applicantType}</span>
+                                    <span className="text-gray-900">{getUserTypeLabel(requester?.userType || 'individual')}</span>
                                 </div>
                             </div>
+
+                            {requester?.organizationName && (
+                                <div>
+                                    <Label className="text-sm font-medium text-gray-500">ORGANIZATION</Label>
+                                    <p className="mt-1 text-gray-900">{requester.organizationName}</p>
+                                    {requester.organizationEmail && (
+                                        <p className="text-sm text-gray-600">{requester.organizationEmail}</p>
+                                    )}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
-                    
                     {request.supportingDocuments && request.supportingDocuments.length > 0 && (
                         <Card>
                             <CardHeader>
@@ -220,6 +254,53 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                     )}
 
                     
+                    {hasPermission('canApproveRequests') && (
+                        <Card className="border-amber-200 bg-amber-50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center text-amber-800">
+                                    <Shield className="h-5 w-5 mr-2" />
+                                    Access Control Information
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-sm font-medium text-amber-700">USER VERIFICATION STATUS</Label>
+                                        <div className="flex items-center mt-1">
+                                            {requester?.isVerified ? (
+                                                <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                                            ) : (
+                                                <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
+                                            )}
+                                            <span className={requester?.isVerified ? 'text-green-700' : 'text-red-700'}>
+                                                {requester?.isVerified ? 'Verified' : 'Unverified'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm font-medium text-amber-700">ACCOUNT CREATED</Label>
+                                        <p className="mt-1 text-amber-800">{new Date(requester?.dateJoined || '').toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-sm font-medium text-amber-700">PERMISSIONS</Label>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        <Badge className="bg-amber-100 text-amber-800">
+                                            {requester?.permissions.requiresApproval ? 'Requires Approval' : 'Pre-approved'}
+                                        </Badge>
+                                        {requester?.permissions.canExportData && (
+                                            <Badge className="bg-green-100 text-green-800">Can Export Data</Badge>
+                                        )}
+                                        {requester?.role === 'internal' && (
+                                            <Badge className="bg-blue-100 text-blue-800">Internal User</Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {(request.status !== 'pending' || hasPermission('canApproveRequests')) && (
                         <Card>
                             <CardHeader>
@@ -250,7 +331,6 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                                     </div>
                                 )}
 
-                                
                                 {hasPermission('canApproveRequests') && (
                                     <div>
                                         <Label htmlFor="admin-notes" className="text-sm font-medium text-gray-500">
@@ -288,17 +368,16 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                         </Card>
                     )}
 
-                    
                     {request.status === 'approved' && isOwner && (
-                        <Card>
+                        <Card className="border-green-200 bg-green-50">
                             <CardHeader>
-                                <CardTitle>Download Data</CardTitle>
-                                <CardDescription>
+                                <CardTitle className="text-green-800">Download Data</CardTitle>
+                                <CardDescription className="text-green-700">
                                     Your request has been approved. Download your data package below.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="flex items-center justify-between p-4 bg-green-100 border border-green-200 rounded-lg">
                                     <div>
                                         <p className="font-medium text-green-900">Data Package Ready</p>
                                         <p className="text-sm text-green-700">
@@ -318,26 +397,34 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                     )}
                 </div>
 
-                
-                <div className="space-y-2">
-                    
+                <div className="space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle>Requester Information</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <div>
-                                <Label className="text-sm font-medium text-gray-500">NAME</Label>
-                                <p className="mt-1 text-gray-900">{request.userName}</p>
+                            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                {requester?.userType === 'individual' || requester?.userType === 'employee' ? (
+                                    <User className="h-8 w-8 text-blue-600" />
+                                ) : (
+                                    <Building className="h-8 w-8 text-green-600" />
+                                )}
+                                <div>
+                                    <p className="font-medium text-gray-900">{request.userName}</p>
+                                    <p className="text-sm text-gray-600">{getUserTypeLabel(requester?.userType || 'individual')}</p>
+                                </div>
                             </div>
+
                             <div>
                                 <Label className="text-sm font-medium text-gray-500">EMAIL</Label>
                                 <p className="mt-1 text-gray-900">{request.userEmail}</p>
                             </div>
+
                             <div>
                                 <Label className="text-sm font-medium text-gray-500">REQUEST DATE</Label>
                                 <p className="mt-1 text-gray-900">{new Date(request.dateCreated).toLocaleDateString()}</p>
                             </div>
+
                             {request.dateUpdated && (
                                 <div>
                                     <Label className="text-sm font-medium text-gray-500">LAST UPDATED</Label>
@@ -347,7 +434,6 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                         </CardContent>
                     </Card>
 
-                    
                     <Card>
                         <CardHeader>
                             <CardTitle>Actions</CardTitle>
@@ -400,6 +486,72 @@ export default function RequestDetails({ request }: RequestDetailsProps) {
                                     Download Admin Copy
                                 </Button>
                             )}
+
+                            {hasPermission('canViewAuditTrail') && (
+                                <Button variant="outline" className="w-full">
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    View Audit Trail
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Request Timeline</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div className="flex items-start space-x-3">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">Request Created</p>
+                                        <p className="text-xs text-gray-500">{new Date(request.dateCreated).toLocaleString()}</p>
+                                        <p className="text-xs text-gray-600">Request submitted by {request.userName}</p>
+                                    </div>
+                                </div>
+
+                                {request.status === 'approved' && (
+                                    <div className="flex items-start space-x-3">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">Request Approved</p>
+                                            <p className="text-xs text-gray-500">{request.dateUpdated && new Date(request.dateUpdated).toLocaleString()}</p>
+                                            <p className="text-xs text-gray-600">Approved by {request.approvedBy}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {request.status === 'rejected' && (
+                                    <div className="flex items-start space-x-3">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-2 h-2 bg-red-600 rounded-full mt-2"></div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">Request Rejected</p>
+                                            <p className="text-xs text-gray-500">{request.dateUpdated && new Date(request.dateUpdated).toLocaleString()}</p>
+                                            <p className="text-xs text-gray-600">Reason: {request.rejectionReason}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {request.status === 'pending' && (
+                                    <div className="flex items-start space-x-3">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-2 h-2 bg-yellow-600 rounded-full mt-2 animate-pulse"></div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">Under Review</p>
+                                            <p className="text-xs text-gray-600">Awaiting approval from administrators</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

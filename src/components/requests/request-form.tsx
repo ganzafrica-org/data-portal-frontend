@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Upload, X, FileText, AlertCircle, Plus, Trash2, Database, Filter, ChevronDown, ChevronRight, Info, Eye } from "lucide-react"
+import { Upload, X, FileText, AlertCircle, Plus, Trash2, Database, Filter, ChevronDown, ChevronRight, Info, Eye, Building, User } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
 import { DataRequest } from "@/lib/data"
@@ -78,6 +78,27 @@ const UpiInput = ({ value, onChange, placeholder }: {
         onChange([...value, ...newUpis])
     }
 
+    const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (file && file.type === 'text/csv') {
+            const reader = new FileReader()
+            reader.onload = (e) => {
+                const csvContent = e.target?.result as string
+                const lines = csvContent.split('\n')
+                const upis = lines
+                    .map(line => line.trim())
+                    .filter(line => line && !line.startsWith('UPI')) // Skip headers
+                    .filter(upi => !value.includes(upi))
+
+                onChange([...value, ...upis])
+                toast.success(`Added ${upis.length} UPIs from CSV file`)
+            }
+            reader.readAsText(file)
+        } else {
+            toast.error('Please upload a valid CSV file')
+        }
+    }
+
     return (
         <div className="space-y-2">
             <div className="flex gap-2">
@@ -93,6 +114,27 @@ const UpiInput = ({ value, onChange, placeholder }: {
                     Add
                 </Button>
             </div>
+
+            <div className="flex items-center gap-2">
+                <Input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCsvUpload}
+                    className="hidden"
+                    id="csv-upload"
+                />
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('csv-upload')?.click()}
+                >
+                    <Upload className="h-3 w-3 mr-1" />
+                    Upload CSV
+                </Button>
+                <span className="text-xs text-muted-foreground">or paste/type manually</span>
+            </div>
+
             {value.length > 0 && (
                 <div className="flex flex-wrap gap-1 p-2 bg-gray-50 rounded-md min-h-[2.5rem]">
                     {value.map((upi, index) => (
@@ -101,7 +143,7 @@ const UpiInput = ({ value, onChange, placeholder }: {
                 </div>
             )}
             <p className="text-xs text-muted-foreground">
-                Enter UPIs one by one or paste multiple UPIs separated by commas or new lines
+                Enter UPIs manually, paste multiple UPIs, or upload a CSV file with UPI column
             </p>
         </div>
     )
@@ -181,13 +223,12 @@ const DatasetPreview = ({ dataset }: { dataset: any }) => {
 }
 
 export default function RequestForm({ mode, initialData }: RequestFormProps) {
-    const { user } = useAuth()
+    const { user, getUserDisplayInfo, getRequiredDocuments } = useAuth()
     const router = useRouter()
 
     const [formData, setFormData] = useState({
         title: initialData?.title || '',
         description: initialData?.description || '',
-        applicantType: initialData?.applicantType || 'individual' as const,
     })
 
     const [datasetSelections, setDatasetSelections] = useState<DatasetSelection[]>([])
@@ -196,7 +237,32 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
     if (!user) return null
 
-    const isExternal = user.role === 'external'
+    const userInfo = getUserDisplayInfo()
+    const requiredDocuments = getRequiredDocuments()
+
+    const getAvailableDatasets = () => {
+
+
+        const userDatasets = Object.entries(DATASET_CATEGORIES).reduce((acc, [categoryKey, category]) => {
+            const filteredDatasets = category.datasets.filter(dataset => {
+
+                if (user.role === 'external') {
+
+                    return !dataset.id.includes('internal-') && !dataset.id.includes('admin-')
+                }
+                return true // Internal users can access all
+            })
+
+            if (filteredDatasets.length > 0) {
+                acc[categoryKey] = { ...category, datasets: filteredDatasets }
+            }
+            return acc
+        }, {} as typeof DATASET_CATEGORIES)
+
+        return userDatasets
+    }
+
+    const availableDatasets = getAvailableDatasets()
 
     const addDatasetSelection = () => {
         const newSelection: DatasetSelection = {
@@ -253,7 +319,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     }
 
     const renderDatasetCategoryCard = (selection: DatasetSelection, index: number) => {
-        const category = DATASET_CATEGORIES[selection.category as keyof typeof DATASET_CATEGORIES]
+        const category = availableDatasets[selection.category as keyof typeof availableDatasets]
         const dataset = category?.datasets.find(d => d.id === selection.type)
 
         return (
@@ -295,7 +361,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
                     <CollapsibleContent>
                         <CardContent className="space-y-6">
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Data Category *</Label>
@@ -307,7 +372,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             <SelectValue placeholder="Choose a data category" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Object.entries(DATASET_CATEGORIES).map(([key, category]) => (
+                                            {Object.entries(availableDatasets).map(([key, category]) => (
                                                 <SelectItem key={key} value={key}>
                                                     <div className="flex items-center">
                                                         <span className="mr-2">{category.icon}</span>
@@ -356,7 +421,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             <SelectValue placeholder="Select specific dataset" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {selection.category && DATASET_CATEGORIES[selection.category as keyof typeof DATASET_CATEGORIES]?.datasets.map(dataset => (
+                                            {selection.category && availableDatasets[selection.category as keyof typeof availableDatasets]?.datasets.map(dataset => (
                                                 <SelectItem key={dataset.id} value={dataset.id}>
                                                     <div>
                                                         <div className="font-medium">{dataset.name}</div>
@@ -369,10 +434,8 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                 </div>
                             </div>
 
-                            
                             {dataset && <DatasetPreview dataset={dataset} />}
 
-                            
                             {dataset && (
                                 <div className="space-y-6 p-4 bg-gray-50 rounded-lg border">
                                     <div className="flex items-center">
@@ -381,7 +444,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        
                                         {dataset.hasAdminLevel && (
                                             <div className="md:col-span-2">
                                                 <AdministrativeLevelSelector
@@ -397,7 +459,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {dataset.hasTransactionType && (
                                             <div className="space-y-2">
                                                 <Label>Transaction Types</Label>
@@ -410,7 +471,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {dataset.hasLandUse && (
                                             <div className="space-y-2">
                                                 <Label>Land Use Types</Label>
@@ -423,7 +483,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {dataset.hasSizeRange && (
                                             <div className="space-y-2">
                                                 <Label>Size Range (hectares)</Label>
@@ -446,7 +505,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {dataset.hasUserLevel && (
                                             <div className="space-y-2">
                                                 <Label>User ID *</Label>
@@ -459,9 +517,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                         )}
                                     </div>
 
-                                    
                                     <div className="space-y-4">
-                                        
                                         {dataset.requiresPeriod && (
                                             <div className="space-y-2">
                                                 <Label>Date Period *</Label>
@@ -472,7 +528,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {(dataset.requiresUpi || dataset.requiresUpiList) && (
                                             <div className="space-y-2">
                                                 <Label>UPI List *</Label>
@@ -489,7 +544,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             </div>
                                         )}
 
-                                        
                                         {dataset.requiresIdList && (
                                             <div className="space-y-2">
                                                 <Label>National ID List *</Label>
@@ -534,28 +588,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
         )
     }
 
-    const getRequiredDocuments = () => {
-        if (!isExternal) {
-            return [
-                { text: 'Authorization letter from supervisor/department head', category: 'authorization' },
-                { text: 'Project documentation (if applicable)', category: 'research' }
-            ]
-        }
-
-        const required = []
-
-        if (formData.applicantType === 'individual') {
-            required.push({ text: 'National ID or Passport', category: 'verification' })
-        } else {
-            required.push({ text: 'Organization registration certificate', category: 'verification' })
-            required.push({ text: 'Authorization letter from organization', category: 'authorization' })
-        }
-
-        required.push({ text: 'Research proposal or project documentation', category: 'research' })
-
-        return required
-    }
-
     const validateForm = () => {
         if (!formData.title.trim()) {
             toast.error('Please enter a request title')
@@ -578,7 +610,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                 return false
             }
 
-            const category = DATASET_CATEGORIES[selection.category as keyof typeof DATASET_CATEGORIES]
+            const category = availableDatasets[selection.category as keyof typeof availableDatasets]
             const dataset = category?.datasets.find(d => d.id === selection.type)
 
             if (dataset?.hasAdminLevel && !selection.criteria.administrativeSelection?.provinces?.length) {
@@ -602,7 +634,8 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
             }
         }
 
-        if (isExternal && uploadedFiles.length === 0 && mode === 'create') {
+        const requiredDocs = requiredDocuments.filter(doc => doc.required)
+        if (user.role === 'external' && requiredDocs.length > 0 && uploadedFiles.length === 0 && mode === 'create') {
             toast.error('Please upload required supporting documents')
             return false
         }
@@ -634,7 +667,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6">
-            
             <div className="space-y-2">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                     {mode === 'create' ? 'Create New Data Request' : 'Edit Data Request'}
@@ -647,8 +679,27 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                 </p>
             </div>
 
+            
+            <Card className="bg-blue p-4 text-white">
+                <CardContent className="flex items-center space-x-4">
+                    <div className="p-3 bg-white/20 rounded-lg">
+                        {userInfo.isOrganization ? (
+                            <Building className="h-6 w-6" />
+                        ) : (
+                            <User className="h-6 w-6" />
+                        )}
+                    </div>
+                    <div>
+                        <h3 className="font-medium">{userInfo.displayName}</h3>
+                        <p className="text-sm text-white/80">{userInfo.typeLabel}</p>
+                        <Badge className="bg-white/20 text-white border-white/20 mt-1">
+                            {userInfo.roleLabel}
+                        </Badge>
+                    </div>
+                </CardContent>
+            </Card>
+
             <form onSubmit={handleSubmit} className="space-y-8">
-                
                 <Card>
                     <CardHeader>
                         <CardTitle>Basic Information</CardTitle>
@@ -679,31 +730,9 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                 required
                             />
                         </div>
-
-                        {isExternal && (
-                            <div className="space-y-2">
-                                <Label>Applicant Type *</Label>
-                                <Select
-                                    value={formData.applicantType}
-                                    onValueChange={(value: 'individual' | 'organization' | 'company') =>
-                                        setFormData(prev => ({ ...prev, applicantType: value }))
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="individual">Individual Researcher</SelectItem>
-                                        <SelectItem value="organization">Research Organization</SelectItem>
-                                        <SelectItem value="company">Private Company</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
 
-                
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center">
@@ -711,7 +740,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                             Dataset Selection
                         </CardTitle>
                         <CardDescription>
-                            Choose the specific datasets you need and configure their parameters. You can request multiple datasets with different criteria.
+                            Choose the specific datasets you need and configure their parameters. Available datasets are filtered based on your user type and access permissions.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -747,12 +776,11 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                     </CardContent>
                 </Card>
 
-                
                 <Card>
                     <CardHeader>
                         <CardTitle>Supporting Documents</CardTitle>
                         <CardDescription>
-                            Upload required documents to support your request
+                            Upload required documents to support your request based on your user type
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -760,15 +788,22 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                             <div className="flex items-start space-x-2">
                                 <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <h4 className="font-medium text-blue-900">Required Documents</h4>
+                                    <h4 className="font-medium text-blue-900">Required Documents for {userInfo.typeLabel}</h4>
                                     <ul className="mt-2 space-y-1">
-                                        {getRequiredDocuments().map((doc, idx) => (
+                                        {requiredDocuments.map((doc, idx) => (
                                             <li key={idx} className="text-sm text-blue-800 flex items-center">
                                                 <span className="w-2 h-2 bg-blue-600 rounded-full mr-2 flex-shrink-0"></span>
                                                 <span className="flex-1">{doc.text}</span>
-                                                <Badge variant="outline" className="ml-2 text-xs">
-                                                    {doc.category}
-                                                </Badge>
+                                                <div className="flex items-center ml-2">
+                                                    <Badge variant="outline" className="text-xs mr-1">
+                                                        {doc.category}
+                                                    </Badge>
+                                                    {doc.required && (
+                                                        <Badge className="bg-red-100 text-red-800 text-xs">
+                                                            Required
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </li>
                                         ))}
                                     </ul>
@@ -852,7 +887,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                     </CardContent>
                 </Card>
 
-                
                 <div className="flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4 pb-8">
                     <Button
                         type="button"
@@ -866,7 +900,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full sm:w-auto "
+                        className="w-full sm:w-auto bg-green hover:bg-green/90"
                     >
                         {isSubmitting ? (
                             <>

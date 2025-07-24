@@ -68,8 +68,8 @@ export default function EmployeeRegisterPage() {
                         <Image
                             src="/images/favicon.png"
                             alt="NLA Logo"
-                            width={60}
-                            height={60}
+                            width={100}
+                            height={100}
                             className="object-contain"
                         />
                         <div className="text-white">
@@ -79,7 +79,7 @@ export default function EmployeeRegisterPage() {
                     </div>
 
                     <div className="text-white max-w-lg">
-                        <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">
+                        <h2 className="text-2xl lg:text-4xl font-bold mb-6 leading-tight">
                             WELCOME<br />
                             <span className="text-yellow">NLA EMPLOYEE</span>
                         </h2>
@@ -189,7 +189,7 @@ export default function EmployeeRegisterPage() {
                                                 Creating account...
                                             </>
                                         ) : (
-                                            'CREATE EMPLOYEE ACCOUNT'
+                                            'Create Account'
                                         )}
                                     </Button>
                                 </form>
