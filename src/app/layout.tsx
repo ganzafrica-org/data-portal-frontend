@@ -5,6 +5,8 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeProvider } from "@/components/theme-provider"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { queryClient } from "@/lib/api-config"
 import React from "react";
 
 const geistSans = Geist({
@@ -32,14 +34,16 @@ export default function RootLayout({
         <body
             className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-        <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light">
-            <TooltipProvider>
-                <AuthProvider>
-                    {children}
-                </AuthProvider>
-            </TooltipProvider>
-            <Toaster />
-        </ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+            <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light">
+                <TooltipProvider>
+                    <AuthProvider>
+                        {children}
+                    </AuthProvider>
+                </TooltipProvider>
+                <Toaster />
+            </ThemeProvider>
+        </QueryClientProvider>
         </body>
         </html>
     )

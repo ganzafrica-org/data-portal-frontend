@@ -28,13 +28,13 @@ export default function LoginPage() {
             return
         }
 
-        const success = await login(email, password)
+        const result = await login(email, password)
 
-        if (success) {
+        if (result.success) {
             toast.success('Login successful')
             router.push('/dashboard')
         } else {
-            toast.error('Invalid credentials. Try password: "password"')
+            toast.error(result.error || 'Login failed. Please check your credentials.')
         }
     }
 

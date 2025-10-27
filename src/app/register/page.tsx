@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,24 +13,26 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import Link from 'next/link'
 import { USER_TYPES } from '@/lib/data'
+import type { RegisterRequest } from '@/lib/api-config'
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
+        name: '',
         email: '',
         password: '',
         confirmPassword: '',
-        userType: '',
+        userType: '' as RegisterRequest['userType'] | '',
+        nationality: '',
+        identityNumber: '',
         organizationName: '',
         organizationEmail: '',
-        organizationWebsite: '',
-        position: '',
-        purpose: ''
+        phone: '',
+        address: ''
     })
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
+    const { register } = useAuth()
     const router = useRouter()
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -42,13 +45,11 @@ export default function RegisterPage() {
     const handleUserTypeChange = (value: string) => {
         setFormData({
             ...formData,
-            userType: value,
+            userType: value as RegisterRequest['userType'],
             // Clear organization fields if switching to individual
             ...(value === 'individual' ? {
                 organizationName: '',
-                organizationEmail: '',
-                organizationWebsite: '',
-                position: ''
+                organizationEmail: ''
             } : {})
         })
     }
@@ -57,8 +58,24 @@ export default function RegisterPage() {
     const selectedUserType = USER_TYPES.find(type => type.value === formData.userType)
 
     const validateForm = () => {
-        if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword || !formData.userType) {
-            toast.error('Please fill in all required fields')
+        // Check required fields
+        if (!formData.name.trim()) {
+            toast.error('Please enter your full name')
+            return false
+        }
+
+        if (!formData.email.trim()) {
+            toast.error('Please enter your email')
+            return false
+        }
+
+        if (!formData.password) {
+            toast.error('Please enter a password')
+            return false
+        }
+
+        if (!formData.confirmPassword) {
+            toast.error('Please confirm your password')
             return false
         }
 
@@ -67,35 +84,43 @@ export default function RegisterPage() {
             return false
         }
 
-        if (formData.password.length < 6) {
-            toast.error('Password must be at least 6 characters')
+        // API password validation: min 8 chars, 1 uppercase, 1 lowercase, 1 number
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+        if (!passwordRegex.test(formData.password)) {
+            toast.error('Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 number')
+            return false
+        }
+
+        if (!formData.userType) {
+            toast.error('Please select your account type')
+            return false
+        }
+
+        if (!formData.nationality.trim()) {
+            toast.error('Please enter your nationality')
+            return false
+        }
+
+        if (!formData.identityNumber.trim()) {
+            toast.error('Please enter your identity/passport number')
+            return false
+        }
+
+        if (!formData.phone.trim()) {
+            toast.error('Please enter your phone number')
+            return false
+        }
+
+        // Phone validation
+        const phoneRegex = /^[\d\s\+\-\(\)]+$/
+        if (!phoneRegex.test(formData.phone)) {
+            toast.error('Please enter a valid phone number')
             return false
         }
 
         // Organization-specific validation
-        if (isOrganization) {
-            if (!formData.organizationName || !formData.organizationEmail || !formData.position) {
-                toast.error('Please fill in all organization details')
-                return false
-            }
-
-            // Validate organization email domain
-            const personalDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com']
-            const emailDomain = formData.organizationEmail.split('@')[1]?.toLowerCase()
-
-            if (personalDomains.includes(emailDomain)) {
-                toast.error('Please use your organization\'s official email address')
-                return false
-            }
-
-            if (formData.email === formData.organizationEmail) {
-                toast.error('Personal and organization emails should be different')
-                return false
-            }
-        }
-
-        if (!formData.purpose.trim()) {
-            toast.error('Please describe the purpose of your data access request')
+        if (isOrganization && !formData.organizationName.trim()) {
+            toast.error('Please enter your organization name')
             return false
         }
 
@@ -110,12 +135,34 @@ export default function RegisterPage() {
         setIsLoading(true)
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            // Prepare data according to API requirements
+            const registerData: RegisterRequest = {
+                email: formData.email.trim(),
+                password: formData.password,
+                name: formData.name.trim(),
+                userType: formData.userType as RegisterRequest['userType'],
+                nationality: formData.nationality.trim(),
+                identityNumber: formData.identityNumber.trim(),
+                phone: formData.phone.trim(),
+                ...(formData.address.trim() && { address: formData.address.trim() }),
+                ...(isOrganization && formData.organizationName.trim() && {
+                    organizationName: formData.organizationName.trim()
+                }),
+                ...(isOrganization && formData.organizationEmail.trim() && {
+                    organizationEmail: formData.organizationEmail.trim()
+                })
+            }
 
-            toast.success('Registration successful! Please check your email to verify your account.')
-            router.push('/login')
+            const result = await register(registerData)
+
+            if (result.success) {
+                toast.success('Registration successful! Please check your email to verify your account.')
+                router.push('/login')
+            } else {
+                toast.error(result.error || 'Registration failed. Please try again.')
+            }
         } catch (error: any) {
-            console.log(error)
+            console.error('Registration error:', error)
             toast.error('Registration failed. Please try again.')
         } finally {
             setIsLoading(false)
@@ -240,31 +287,61 @@ export default function RegisterPage() {
                                     </div>
 
                                     {/* Personal Information */}
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="name" className="text-gray-700 text-sm">
+                                            Full Name *
+                                        </Label>
+                                        <Input
+                                            id="name"
+                                            name="name"
+                                            type="text"
+                                            placeholder="Enter your full name"
+                                            value={formData.name}
+                                            onChange={handleChange}
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email" className="text-gray-700 text-sm">
+                                            Email Address *
+                                        </Label>
+                                        <Input
+                                            id="email"
+                                            name="email"
+                                            type="email"
+                                            placeholder="Enter your email address"
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="firstName" className="text-gray-700 text-sm">
-                                                First Name *
+                                            <Label htmlFor="nationality" className="text-gray-700 text-sm">
+                                                Nationality *
                                             </Label>
                                             <Input
-                                                id="firstName"
-                                                name="firstName"
+                                                id="nationality"
+                                                name="nationality"
                                                 type="text"
-                                                placeholder="Enter first name"
-                                                value={formData.firstName}
+                                                placeholder="e.g., Rwandan"
+                                                value={formData.nationality}
                                                 onChange={handleChange}
                                                 disabled={isLoading}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="lastName" className="text-gray-700 text-sm">
-                                                Last Name *
+                                            <Label htmlFor="identityNumber" className="text-gray-700 text-sm">
+                                                Identity/Passport Number *
                                             </Label>
                                             <Input
-                                                id="lastName"
-                                                name="lastName"
+                                                id="identityNumber"
+                                                name="identityNumber"
                                                 type="text"
-                                                placeholder="Enter last name"
-                                                value={formData.lastName}
+                                                placeholder="Enter your ID or passport number"
+                                                value={formData.identityNumber}
                                                 onChange={handleChange}
                                                 disabled={isLoading}
                                             />
@@ -272,15 +349,30 @@ export default function RegisterPage() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="email" className="text-gray-700 text-sm">
-                                            Personal Email *
+                                        <Label htmlFor="phone" className="text-gray-700 text-sm">
+                                            Phone Number *
                                         </Label>
                                         <Input
-                                            id="email"
-                                            name="email"
-                                            type="email"
-                                            placeholder="Enter your personal email"
-                                            value={formData.email}
+                                            id="phone"
+                                            name="phone"
+                                            type="tel"
+                                            placeholder="+250 XXX XXX XXX"
+                                            value={formData.phone}
+                                            onChange={handleChange}
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="address" className="text-gray-700 text-sm">
+                                            Address (Optional)
+                                        </Label>
+                                        <Input
+                                            id="address"
+                                            name="address"
+                                            type="text"
+                                            placeholder="Enter your address"
+                                            value={formData.address}
                                             onChange={handleChange}
                                             disabled={isLoading}
                                         />
@@ -309,47 +401,16 @@ export default function RegisterPage() {
                                                 />
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="organizationEmail" className="text-gray-700 text-sm">
-                                                        Organization Email *
-                                                    </Label>
-                                                    <Input
-                                                        id="organizationEmail"
-                                                        name="organizationEmail"
-                                                        type="email"
-                                                        placeholder="Enter organization email"
-                                                        value={formData.organizationEmail}
-                                                        onChange={handleChange}
-                                                        disabled={isLoading}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="organizationWebsite" className="text-gray-700 text-sm">
-                                                        Organization Website
-                                                    </Label>
-                                                    <Input
-                                                        id="organizationWebsite"
-                                                        name="organizationWebsite"
-                                                        type="url"
-                                                        placeholder="https://example.com"
-                                                        value={formData.organizationWebsite}
-                                                        onChange={handleChange}
-                                                        disabled={isLoading}
-                                                    />
-                                                </div>
-                                            </div>
-
                                             <div className="space-y-2">
-                                                <Label htmlFor="position" className="text-gray-700 text-sm">
-                                                    Your Position/Role *
+                                                <Label htmlFor="organizationEmail" className="text-gray-700 text-sm">
+                                                    Organization Email (Optional)
                                                 </Label>
                                                 <Input
-                                                    id="position"
-                                                    name="position"
-                                                    type="text"
-                                                    placeholder="e.g., Research Director, Project Manager"
-                                                    value={formData.position}
+                                                    id="organizationEmail"
+                                                    name="organizationEmail"
+                                                    type="email"
+                                                    placeholder="Enter organization email"
+                                                    value={formData.organizationEmail}
                                                     onChange={handleChange}
                                                     disabled={isLoading}
                                                 />
@@ -386,6 +447,9 @@ export default function RegisterPage() {
                                                     )}
                                                 </button>
                                             </div>
+                                            <p className="text-xs text-gray-500">
+                                                Min 8 chars, 1 uppercase, 1 lowercase, 1 number
+                                            </p>
                                         </div>
 
                                         <div className="space-y-2">
