@@ -794,16 +794,9 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                             <li key={idx} className="text-sm text-blue-800 flex items-center">
                                                 <span className="w-2 h-2 bg-blue-600 rounded-full mr-2 flex-shrink-0"></span>
                                                 <span className="flex-1">{doc.text}</span>
-                                                <div className="flex items-center ml-2">
-                                                    <Badge variant="outline" className="text-xs mr-1">
-                                                        {doc.category}
-                                                    </Badge>
-                                                    {doc.required && (
-                                                        <Badge className="bg-red-100 text-red-800 text-xs">
-                                                            Required
-                                                        </Badge>
-                                                    )}
-                                                </div>
+                                                {doc.required && (
+                                                    <Badge className="bg-red-100 text-red-800 text-xs ml-2">Required</Badge>
+                                                )}
                                             </li>
                                         ))}
                                     </ul>
@@ -853,22 +846,6 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                                                 </div>
                                             </div>
                                             <div className="flex items-center space-x-2 flex-shrink-0">
-                                                <Select
-                                                    value={fileObj.category}
-                                                    onValueChange={(value: 'verification' | 'research' | 'authorization' | 'other') =>
-                                                        updateFileCategory(idx, value)
-                                                    }
-                                                >
-                                                    <SelectTrigger className="w-32">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="verification">Verification</SelectItem>
-                                                        <SelectItem value="research">Research</SelectItem>
-                                                        <SelectItem value="authorization">Authorization</SelectItem>
-                                                        <SelectItem value="other">Other</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"

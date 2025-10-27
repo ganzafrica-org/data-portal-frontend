@@ -221,39 +221,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getRequiredDocuments = () => {
         if (!user) return []
 
-        const docs = []
+        const docs = [] as Array<{ text: string; category: 'verification' | 'research' | 'authorization' | 'other'; required: boolean }>
 
+        // Map external roles according to provided NLA requirements
         if (user.role === 'external') {
-            if (user.userType === 'individual') {
-                docs.push(
-                    { text: 'National ID or Passport', category: 'verification' as const, required: true },
-                    { text: 'Research proposal or project documentation', category: 'research' as const, required: true }
-                )
-            } else {
-
-                docs.push(
-                    { text: 'Organization registration certificate', category: 'verification' as const, required: true },
-                    { text: 'Authorization letter from organization', category: 'authorization' as const, required: true },
-                    { text: 'Research proposal or project documentation', category: 'research' as const, required: true },
-                    { text: 'Representative ID/Passport', category: 'verification' as const, required: true }
-                )
-
-                if (user.userType === 'academic_institution') {
-                    docs.push({ text: 'Academic ethics approval (if applicable)', category: 'research' as const, required: false })
-                } else if (user.userType === 'private_company') {
+            switch (user.userType) {
+                case 'individual':
+                    // Individual academic researcher
                     docs.push(
-                        { text: 'Business license', category: 'verification' as const, required: true },
-                        { text: 'Tax clearance certificate', category: 'verification' as const, required: false }
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Copy of identity card or passport', category: 'verification', required: true },
+                        { text: 'Research permit from National Council for Science and Technology (NCST)', category: 'authorization', required: true },
+                        { text: 'Formal research proposal (objectives, methodology, duration, expected outcomes)', category: 'research', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
                     )
-                } else if (user.userType === 'international_organization') {
-                    docs.push({ text: 'Diplomatic note or official communication', category: 'authorization' as const, required: true })
-                }
+                    break
+                case 'academic_institution':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Copy of institutional registration certificate (or proof of legal establishment)', category: 'verification', required: true },
+                        { text: 'Research permit from NCST (for PhD and MSc researchers)', category: 'authorization', required: true },
+                        { text: 'Accreditation certificate from relevant education authority or ministry (if applicable)', category: 'verification', required: false },
+                        { text: 'Formal research proposal (objectives, methodology, duration, expected outcomes)', category: 'research', required: true },
+                        { text: 'Letter of support from a government institution linked to the research', category: 'authorization', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                case 'research_organization':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Brief description of the organization (mandate, focus areas, past relevant projects)', category: 'other', required: true },
+                        { text: 'Registration certificate or proof of legal status', category: 'verification', required: true },
+                        { text: 'Formal research proposal (objectives, methodology, duration, expected outcomes)', category: 'research', required: true },
+                        { text: 'Letter of support from a government institution linked to the project', category: 'authorization', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                case 'private_company':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Registration certificate or proof of legal status', category: 'verification', required: true },
+                        { text: 'Concept note (why data is needed, objectives, methodology, expected outcomes)', category: 'research', required: true },
+                        { text: 'Letter of support from a government institution linked to the project', category: 'authorization', required: true },
+                        { text: 'Proof of payment of fees as per relevant laws/regulations', category: 'verification', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                case 'ngo':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Registration certificate or proof of legal status', category: 'verification', required: true },
+                        { text: 'Research permit from National Council for Science and Technology (NCST)', category: 'authorization', required: true },
+                        { text: 'Concept note (why data is needed, objectives, methodology, expected outcomes)', category: 'research', required: true },
+                        { text: 'Letter of support from a government institution linked to the project', category: 'authorization', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                case 'government_agency':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Concept note (why data is needed, objectives, methodology, expected outcomes)', category: 'research', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                case 'international_organization':
+                    docs.push(
+                        { text: 'Application letter addressed to the DG of NLA', category: 'authorization', required: true },
+                        { text: 'Concept note (why data is needed, objectives, methodology, expected outcomes)', category: 'research', required: true },
+                        { text: 'Research permit from National Council for Science and Technology (NCST)', category: 'authorization', required: true },
+                        { text: 'Letter of support from a government institution linked to the project', category: 'authorization', required: true },
+                        { text: 'Data specifications (format, projection, time period, etc.) if applicable', category: 'research', required: false }
+                    )
+                    break
+                default:
+                    break
             }
         } else {
-
+            // Internal staff (employees)
             docs.push(
-                { text: 'Authorization letter from supervisor/department head', category: 'authorization' as const, required: true },
-                { text: 'Project documentation (if applicable)', category: 'research' as const, required: false }
+                { text: 'Authorization letter from supervisor/department head', category: 'authorization', required: true },
+                { text: 'Project documentation (if applicable)', category: 'research', required: false }
             )
         }
 
