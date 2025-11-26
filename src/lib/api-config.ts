@@ -1,23 +1,24 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
-import { QueryClient } from '@tanstack/react-query';
-import Cookies from 'js-cookie';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
+import { QueryClient } from "@tanstack/react-query";
+import Cookies from "js-cookie";
 
 // ============================================================================
 // API CLIENT CONFIGURATION
 // ============================================================================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 // Cookie names
-const COOKIE_ACCESS_TOKEN = 'nla_access_token';
-const COOKIE_REFRESH_TOKEN = 'nla_refresh_token';
-const COOKIE_USER = 'nla_user';
+const COOKIE_ACCESS_TOKEN = "nla_access_token";
+const COOKIE_REFRESH_TOKEN = "nla_refresh_token";
+const COOKIE_USER = "nla_user";
 
 // Cookie options
 const COOKIE_OPTIONS = {
   expires: 7, // 7 days
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
 };
 
 // Token management functions
@@ -46,7 +47,7 @@ export const tokenManager = {
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 30000, // 30 seconds
 });
@@ -62,14 +63,16 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor - Handle token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiErrorResponse>) => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as AxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
     // If 401 and not already retried, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -81,18 +84,19 @@ apiClient.interceptors.response.use(
         if (!refreshToken) {
           // No refresh token, clear and redirect
           tokenManager.clearTokens();
-          window.location.href = '/login';
+          window.location.href = "/login";
           return Promise.reject(error);
         }
 
         // Try to refresh token
         const response = await axios.post<ApiResponse<RefreshTokenResponse>>(
           `${API_BASE_URL}/auth/refresh`,
-          { refreshToken }
+          { refreshToken },
         );
 
         if (response.data.success && response.data.data) {
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+          const { accessToken, refreshToken: newRefreshToken } =
+            response.data.data;
 
           // Update tokens
           tokenManager.setTokens(accessToken, newRefreshToken);
@@ -107,31 +111,35 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, clear tokens and redirect to login
         tokenManager.clearTokens();
-        window.location.href = '/login';
+        window.location.href = "/login";
         return Promise.reject(refreshError);
       }
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // ============================================================================
-// REACT QUERY CLIENT
+// REACT QUERY CLIENT FACTORY
 // ============================================================================
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
-      refetchOnWindowFocus: false,
+// Create a function that returns a new QueryClient instance
+// This avoids passing the class instance across Server/Client Component boundary
+export function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        retry: 1,
+        refetchOnWindowFocus: false,
+      },
+      mutations: {
+        retry: 0,
+      },
     },
-    mutations: {
-      retry: 0,
-    },
-  },
-});
+  });
+}
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -175,10 +183,16 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'external' | 'internal' | 'admin';
-  userType: 'individual' | 'academic_institution' | 'research_organization' |
-            'private_company' | 'ngo' | 'government_agency' |
-            'international_organization' | 'employee';
+  role: "external" | "internal" | "admin";
+  userType:
+    | "individual"
+    | "academic_institution"
+    | "research_organization"
+    | "private_company"
+    | "ngo"
+    | "government_agency"
+    | "international_organization"
+    | "employee";
   nationality: string;
   identityNumber: string;
   isIdVerified: boolean;
@@ -198,10 +212,16 @@ export interface RegisterRequest {
   email: string;
   password: string;
   name: string;
-  role?: 'external' | 'internal' | 'admin';
-  userType: 'individual' | 'academic_institution' | 'research_organization' |
-            'private_company' | 'ngo' | 'government_agency' |
-            'international_organization' | 'employee';
+  role?: "external" | "internal" | "admin";
+  userType:
+    | "individual"
+    | "academic_institution"
+    | "research_organization"
+    | "private_company"
+    | "ngo"
+    | "government_agency"
+    | "international_organization"
+    | "employee";
   nationality: string;
   identityNumber: string;
   organizationName?: string;
@@ -232,14 +252,18 @@ export interface LoginResponse {
 export const getErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<ApiErrorResponse>;
-    return axiosError.response?.data?.error?.message || error.message || 'An unexpected error occurred';
+    return (
+      axiosError.response?.data?.error?.message ||
+      error.message ||
+      "An unexpected error occurred"
+    );
   }
 
   if (error instanceof Error) {
     return error.message;
   }
 
-  return 'An unexpected error occurred';
+  return "An unexpected error occurred";
 };
 
 export default apiClient;

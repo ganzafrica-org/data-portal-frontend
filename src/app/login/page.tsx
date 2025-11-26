@@ -38,43 +38,6 @@ export default function LoginPage() {
         }
     }
 
-    const demoAccounts = [
-        {
-            type: 'Individual Researcher',
-            email: 'john.mukiza@researcher.com',
-            role: 'External',
-            icon: <User className="h-4 w-4" />,
-            color: 'bg-blue-100 text-blue-800'
-        },
-        {
-            type: 'Academic Institution',
-            email: 'sarah.johnson@university.edu',
-            role: 'External',
-            icon: <Building className="h-4 w-4" />,
-            color: 'bg-purple-100 text-purple-800'
-        },
-        {
-            type: 'Private Company',
-            email: 'david.smith@consultancy.com',
-            role: 'External',
-            icon: <Building className="h-4 w-4" />,
-            color: 'bg-orange-100 text-orange-800'
-        },
-        {
-            type: 'NLA Employee',
-            email: 'marie.uwimana@nla.gov.rw',
-            role: 'Internal',
-            icon: <User className="h-4 w-4" />,
-            color: 'bg-green-100 text-green-800'
-        },
-        {
-            type: 'NLA Admin',
-            email: 'admin@nla.gov.rw',
-            role: 'Admin',
-            icon: <User className="h-4 w-4" />,
-            color: 'bg-red-100 text-red-800'
-        }
-    ]
 
     return (
         <div className="min-h-screen relative overflow-hidden">
@@ -244,34 +207,6 @@ export default function LoginPage() {
                                             Register as Employee
                                         </Button>
                                     </Link>
-                                </div>
-
-                                {/* Demo Credentials */}
-                                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
-                                    <h4 className="font-medium mb-3 text-gray-900">Demo Accounts</h4>
-                                    <div className="space-y-2">
-                                        {demoAccounts.map((account, index) => (
-                                            <div key={index} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
-                                                <div className="flex items-center space-x-2">
-                                                    {account.icon}
-                                                    <span className="font-medium text-gray-700">{account.type}</span>
-                                                    <Badge className={account.color} variant="outline">
-                                                        {account.role}
-                                                    </Badge>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setEmail(account.email)
-                                                        setPassword("password")
-                                                    }}
-                                                    className="text-blue hover:underline"
-                                                >
-                                                    Use
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
