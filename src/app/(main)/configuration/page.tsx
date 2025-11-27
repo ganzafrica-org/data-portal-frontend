@@ -18,7 +18,6 @@ import { api, getErrorMessage } from "@/lib/api-config";
 import { Skeleton } from "@/components/ui/skeleton";
 import DatasetsTab from "@/components/configuration/datasets-tab";
 import CategoriesTab from "@/components/configuration/categories-tab";
-import AnalyticsTab from "@/components/configuration/analytics-tab";
 
 export default function DatasetConfigurationPage() {
   const { user, hasPermission } = useAuth();
@@ -78,7 +77,6 @@ export default function DatasetConfigurationPage() {
         <TabsList>
           <TabsTrigger value="datasets">Datasets</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <Suspense
@@ -96,10 +94,6 @@ export default function DatasetConfigurationPage() {
 
           <TabsContent value="categories" className="space-y-4">
             <CategoriesTab />
-          </TabsContent>
-
-          <TabsContent value="analytics" className="space-y-4">
-            <AnalyticsTab />
           </TabsContent>
         </Suspense>
       </Tabs>
