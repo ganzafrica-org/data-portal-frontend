@@ -74,7 +74,7 @@ export default function DatasetConfigurationPage() {
         onValueChange={handleTabChange}
         className="space-y-6"
       >
-        <TabsList>
+        <TabsList className="bg-white">
           <TabsTrigger value="datasets">Datasets</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
         </TabsList>

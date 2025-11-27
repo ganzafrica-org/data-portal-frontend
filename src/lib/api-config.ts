@@ -580,6 +580,82 @@ export const api = {
     );
     return response.data.data!;
   },
+
+  // Analytics
+  getRequestAnalytics: async (params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(
+      "/analytics/requests",
+      { params },
+    );
+    return response.data.data!;
+  },
+
+  getUserAnalytics: async (params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>("/analytics/users", {
+      params,
+    });
+    return response.data.data!;
+  },
+
+  getDatasetAnalytics: async (params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(
+      "/analytics/datasets",
+      { params },
+    );
+    return response.data.data!;
+  },
+
+  // Audit Trail
+  getAuditTrail: async (params?: {
+    entityType?: string;
+    entityId?: string;
+    userId?: string;
+    action?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>("/audit-trail", {
+      params,
+    });
+    return response.data.data!;
+  },
+
+  getAuditStatistics: async (params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(
+      "/audit-trail/statistics",
+      { params },
+    );
+    return response.data.data!;
+  },
+
+  // Export Logs
+  getExportLogs: async (params?: {
+    requestId?: string;
+    userId?: string;
+    exportFormat?: string;
+    exportType?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>("/exports/logs", {
+      params,
+    });
+    return response.data.data!;
+  },
 };
 
 // ============================================================================
