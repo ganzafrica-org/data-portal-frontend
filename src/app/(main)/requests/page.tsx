@@ -1,5 +1,5 @@
-import RequestsTable from '@/components/requests/requests-table'
+import RequestsPageContent from "@/components/requests/requests-page-content";
 
 export default function RequestsPage() {
-    return <RequestsTable />
+  return <RequestsPageContent />;
 }

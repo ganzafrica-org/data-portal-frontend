@@ -2,9 +2,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { QueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
-// ============================================================================
 // API CLIENT CONFIGURATION
-// ============================================================================
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
@@ -120,11 +118,8 @@ apiClient.interceptors.response.use(
   },
 );
 
-// ============================================================================
 // REACT QUERY CLIENT FACTORY
-// ============================================================================
 
-// Create a function that returns a new QueryClient instance
 // This avoids passing the class instance across Server/Client Component boundary
 export function makeQueryClient() {
   return new QueryClient({
@@ -141,9 +136,7 @@ export function makeQueryClient() {
   });
 }
 
-// ============================================================================
 // TYPE DEFINITIONS
-// ============================================================================
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -245,9 +238,176 @@ export interface LoginResponse {
   refreshToken: string;
 }
 
+// ANALYTICS & DASHBOARD TYPES
+
+export interface RequestStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  in_review: number;
+  resubmitted?: number;
+}
+
+export interface UserStats {
+  total: number;
+  external: number;
+  internal: number;
+  admin: number;
+  verified: number;
+  unverified: number;
+}
+
+export interface DatasetStats {
+  total: number;
+  categories: number;
+  totalRequests: number;
+}
+
+export interface RecentRequest {
+  id: string;
+  requestNumber: string;
+  title: string;
+  status: string;
+  priority?: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+}
+
+export interface MonthlyData {
+  month: string;
+  count: number;
+}
+
+export interface DashboardData {
+  requests: RequestStats;
+  users?: UserStats;
+  datasets?: DatasetStats;
+  recentActivity: RecentRequest[];
+  requestsByMonth?: MonthlyData[];
+}
+
+// API FUNCTIONS
+
+export const api = {
+  // Dashboard
+  getDashboardData: async (): Promise<DashboardData> => {
+    const response = await apiClient.get<ApiResponse<DashboardData>>(
+      "/analytics/dashboard",
+    );
+    return response.data.data!;
+  },
+
+  // Requests
+  getRequests: async (
+    params: RequestsQueryParams,
+  ): Promise<RequestsResponse> => {
+    const response = await apiClient.get<ApiResponse<RequestsResponse>>(
+      "/requests",
+      { params },
+    );
+    return response.data.data!;
+  },
+
+  // User Profile
+  getCurrentUser: async (): Promise<User> => {
+    const response = await apiClient.get<ApiResponse<User>>("/users/me");
+    return response.data.data!;
+  },
+
+  updateCurrentUser: async (data: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    organizationName?: string;
+    organizationEmail?: string;
+  }): Promise<User> => {
+    const response = await apiClient.put<ApiResponse<User>>("/users/me", data);
+    return response.data.data!;
+  },
+};
+
+// ============================================================================
+// REQUESTS TYPES
+// ============================================================================
+
+export interface RequestDocument {
+  id: string;
+  originalFilename: string;
+  category: string;
+  isVerified: boolean;
+}
+
+export interface RequestDataset {
+  id: string;
+  datasetId: string;
+  datasetStatus: string;
+  criteria: any;
+  dataset: {
+    id: string;
+    name: string;
+    deactivatedAt: string | null;
+  };
+}
+
+export interface Request {
+  id: string;
+  requestNumber: string;
+  title: string;
+  description: string | null;
+  status: "pending" | "approved" | "rejected" | "in_review" | "resubmitted";
+  priority: "low" | "normal" | "high" | "urgent";
+  createdAt: string;
+  updatedAt: string;
+  approvedAt: string | null;
+  adminNotes: string | null;
+  rejectionReason: string | null;
+  userId: string;
+  approvedBy: string | null;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    userType: string;
+  };
+  datasets: RequestDataset[];
+  documents: RequestDocument[];
+  _count: {
+    comments: number;
+  };
+}
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface RequestsResponse {
+  requests: Request[];
+  pagination: PaginationMeta;
+}
+
+export interface RequestsQueryParams {
+  status?: string;
+  priority?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
 // ============================================================================
 // ERROR HANDLING
-// ============================================================================
 
 export const getErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
