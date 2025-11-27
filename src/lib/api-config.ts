@@ -404,11 +404,116 @@ export const api = {
     await apiClient.delete(`/requests/${requestId}/datasets/${datasetId}`);
   },
 
-  getDatasetCategories: async (): Promise<any[]> => {
+  getDatasetCategories: async (params?: {
+    includeInactive?: boolean;
+    search?: string;
+  }): Promise<any[]> => {
     const response = await apiClient.get<ApiResponse<any[]>>(
       "/dataset-categories",
+      { params },
     );
     return response.data.data!;
+  },
+
+  createDatasetCategory: async (data: {
+    name: string;
+    icon?: string;
+    description?: string;
+    sortOrder?: number;
+  }): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(
+      "/dataset-categories",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  updateDatasetCategory: async (
+    categoryId: string,
+    data: {
+      name?: string;
+      icon?: string;
+      description?: string;
+      sortOrder?: number;
+      deactivatedAt?: string | null;
+    },
+  ): Promise<any> => {
+    const response = await apiClient.put<ApiResponse<any>>(
+      `/dataset-categories/${categoryId}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getDatasets: async (params?: {
+    categoryId?: string;
+    includeInactive?: boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>("/datasets", {
+      params,
+    });
+    return response.data.data!;
+  },
+
+  getDatasetById: async (datasetId: string): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(
+      `/datasets/${datasetId}`,
+    );
+    return response.data.data!;
+  },
+
+  createDataset: async (data: {
+    categoryId?: string;
+    name: string;
+    description?: string;
+    requiresPeriod?: boolean;
+    requiresUpiList?: boolean;
+    requiresIdList?: boolean;
+    requiresUpi?: boolean;
+    hasAdminLevel?: boolean;
+    hasUserLevel?: boolean;
+    hasTransactionType?: boolean;
+    hasLandUse?: boolean;
+    hasSizeRange?: boolean;
+    fields?: any;
+    criteria?: any;
+  }): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>("/datasets", data);
+    return response.data.data!;
+  },
+
+  updateDataset: async (
+    datasetId: string,
+    data: {
+      categoryId?: string;
+      name?: string;
+      description?: string;
+      requiresPeriod?: boolean;
+      requiresUpiList?: boolean;
+      requiresIdList?: boolean;
+      requiresUpi?: boolean;
+      hasAdminLevel?: boolean;
+      hasUserLevel?: boolean;
+      hasTransactionType?: boolean;
+      hasLandUse?: boolean;
+      hasSizeRange?: boolean;
+      fields?: any;
+      criteria?: any;
+      deactivatedAt?: string | null;
+    },
+  ): Promise<any> => {
+    const response = await apiClient.put<ApiResponse<any>>(
+      `/datasets/${datasetId}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  deleteDataset: async (datasetId: string): Promise<void> => {
+    await apiClient.delete(`/datasets/${datasetId}`);
   },
 
   // User Profile
