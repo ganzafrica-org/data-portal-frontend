@@ -122,23 +122,25 @@ export default function RequestsPageContent() {
     <div className="space-y-6">
       {/* Header */}
       <Card className="bg-green text-white">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Data Requests</CardTitle>
-            <p className="text-yellow mt-1">
-              {user.role === "admin" || user.permissions.canViewAllRequests
-                ? "Manage and review all data access requests"
-                : "Track and manage your data access requests"}
-            </p>
+        <CardHeader>
+          <div className="flex flex-row items-start justify-between gap-4">
+            <div className="flex-1">
+              <CardTitle className="text-2xl">Data Requests</CardTitle>
+              <p className="text-yellow mt-1">
+                {user.role === "admin" || user.permissions.canViewAllRequests
+                  ? "Manage and review all data access requests"
+                  : "Track and manage your data access requests"}
+              </p>
+            </div>
+            {canCreateRequest && (
+              <Button asChild variant="secondary" className="shrink-0">
+                <Link href="/requests/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Request
+                </Link>
+              </Button>
+            )}
           </div>
-          {canCreateRequest && (
-            <Button asChild variant="secondary">
-              <Link href="/requests/new">
-                <Plus className="h-4 w-4 mr-2" />
-                New Request
-              </Link>
-            </Button>
-          )}
         </CardHeader>
       </Card>
 

@@ -1,45 +1,62 @@
-"use client"
+"use client";
 
-import { notFound } from 'next/navigation'
-import { use } from 'react'
-import RequestForm from '@/components/requests/request-form'
-import { DUMMY_REQUESTS } from '@/lib/data'
-import { useAuth } from '@/contexts/auth-context'
+import { notFound } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import RequestFormNew from "@/components/requests/request-form-new";
+import { api, getErrorMessage, type Request } from "@/lib/api-config";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 interface EditRequestPageProps {
-    params: Promise<{
-        id: string
-    }>
+  params: Promise<{
+    id: string;
+  }>;
 }
 
 export default function EditRequestPage({ params }: EditRequestPageProps) {
-    const { user, hasPermission } = useAuth()
+  const resolvedParams = use(params);
+  const [request, setRequest] = useState<Request | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFoundError, setNotFoundError] = useState(false);
 
-    const resolvedParams = use(params)
-    const request = DUMMY_REQUESTS.find(req => req.id === resolvedParams.id)
+  useEffect(() => {
+    const fetchRequest = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getRequestById(resolvedParams.id);
+        setRequest(data);
+      } catch (error: any) {
+        console.error("Error fetching request:", error);
+        if (error.response?.status === 404) {
+          setNotFoundError(true);
+        } else {
+          toast.error(getErrorMessage(error));
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    if (!request) {
-        notFound()
-    }
+    fetchRequest();
+  }, [resolvedParams.id]);
 
-    const canEdit = user && (
-        (user.id === request.userId && request.status === 'pending') ||
-        hasPermission('canApproveRequests')
-    )
+  if (notFoundError) {
+    notFound();
+  }
 
-    if (!canEdit) {
-        return (
-            <div className="max-w-4xl mx-auto py-12 text-center">
-                <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-                <p className="text-gray-600 mb-6">
-                    You don&#39;t have permission to edit this request.
-                </p>
-                <p className="text-sm text-gray-500">
-                    You can only edit your own pending requests.
-                </p>
-            </div>
-        )
-    }
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 p-4 sm:p-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
-    return <RequestForm mode="edit" initialData={request} />
+  if (!request) {
+    return null;
+  }
+
+  return <RequestFormNew mode="edit" initialData={request} />;
 }

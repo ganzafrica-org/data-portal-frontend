@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -13,24 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Calendar,
-  Mail,
-  Save,
-  Shield,
-  User as UserIcon,
-  Building,
-  Phone,
-  MapPin,
-} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar, Mail, Save, Shield, User } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { api, getErrorMessage } from "@/lib/api-config";
+import { api, getErrorMessage, type Request } from "@/lib/api-config";
 import { toast } from "sonner";
 
 export default function ProfilePage() {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [userRequests, setUserRequests] = useState<Request[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(true);
 
   const [formData, setFormData] = useState({
     name: user?.name || "",
@@ -39,6 +33,23 @@ export default function ProfilePage() {
     organizationName: user?.organizationName || "",
     organizationEmail: user?.organizationEmail || "",
   });
+
+  useEffect(() => {
+    const fetchUserRequests = async () => {
+      try {
+        const result = await api.getRequests({ page: 1, limit: 1000 });
+        setUserRequests(result.requests);
+      } catch (error) {
+        console.error("Error fetching user requests:", error);
+      } finally {
+        setIsLoadingRequests(false);
+      }
+    };
+
+    if (user) {
+      fetchUserRequests();
+    }
+  }, [user]);
 
   if (!user) return null;
 
@@ -160,21 +171,74 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="phone">Phone Number</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
+                    id="phone"
+                    type="tel"
+                    value={formData.phone}
                     onChange={(e) =>
                       setFormData((prev) => ({
                         ...prev,
-                        email: e.target.value,
+                        phone: e.target.value,
                       }))
                     }
                     disabled={!isEditing}
                   />
                 </div>
               </div>
+
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: e.target.value,
+                    }))
+                  }
+                  disabled={!isEditing}
+                />
+              </div>
+
+              {isOrganization && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="organizationName">Organization Name</Label>
+                    <Input
+                      id="organizationName"
+                      value={formData.organizationName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          organizationName: e.target.value,
+                        }))
+                      }
+                      disabled={!isEditing}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="organizationEmail">
+                      Organization Email
+                    </Label>
+                    <Input
+                      id="organizationEmail"
+                      type="email"
+                      value={formData.organizationEmail}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          organizationEmail: e.target.value,
+                        }))
+                      }
+                      disabled={!isEditing}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Separator />
 
               <div>
                 <Label className="text-sm font-medium text-gray-500">
@@ -182,70 +246,14 @@ export default function ProfilePage() {
                 </Label>
                 <p className="mt-1 text-gray-900">{getRoleLabel(user.role)}</p>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Change Password</CardTitle>
-              <CardDescription>
-                Update your password to keep your account secure
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="currentPassword">Current Password</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  value={formData.currentPassword}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      currentPassword: e.target.value,
-                    }))
-                  }
-                  disabled={!isEditing}
-                  placeholder={
-                    isEditing ? "Enter current password" : "••••••••"
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={formData.newPassword}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        newPassword: e.target.value,
-                      }))
-                    }
-                    disabled={!isEditing}
-                    placeholder={isEditing ? "Enter new password" : "••••••••"}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        confirmPassword: e.target.value,
-                      }))
-                    }
-                    disabled={!isEditing}
-                    placeholder={
-                      isEditing ? "Confirm new password" : "••••••••"
-                    }
-                  />
-                </div>
+                <Label className="text-sm font-medium text-gray-500">
+                  USER TYPE
+                </Label>
+                <p className="mt-1 text-gray-900 capitalize">
+                  {user.userType.replace(/_/g, " ")}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -353,30 +361,61 @@ export default function ProfilePage() {
               <CardTitle>Activity Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-500">
-                  TOTAL REQUESTS
-                </Label>
-                <p className="mt-1 text-2xl font-bold text-gray-900">
-                  {userRequests.length}
-                </p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-500">
-                  APPROVED
-                </Label>
-                <p className="mt-1 text-2xl font-bold text-green-600">
-                  {userRequests.filter((r) => r.status === "approved").length}
-                </p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-500">
-                  PENDING
-                </Label>
-                <p className="mt-1 text-2xl font-bold text-yellow-600">
-                  {userRequests.filter((r) => r.status === "pending").length}
-                </p>
-              </div>
+              {isLoadingRequests ? (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-500">
+                      TOTAL REQUESTS
+                    </Label>
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-500">
+                      APPROVED
+                    </Label>
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-500">
+                      PENDING
+                    </Label>
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">
+                      TOTAL REQUESTS
+                    </Label>
+                    <p className="mt-1 text-2xl font-bold text-gray-900">
+                      {userRequests.length}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">
+                      APPROVED
+                    </Label>
+                    <p className="mt-1 text-2xl font-bold text-green-600">
+                      {
+                        userRequests.filter((r) => r.status === "approved")
+                          .length
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">
+                      PENDING
+                    </Label>
+                    <p className="mt-1 text-2xl font-bold text-yellow-600">
+                      {
+                        userRequests.filter((r) => r.status === "pending")
+                          .length
+                      }
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

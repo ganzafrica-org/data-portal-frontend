@@ -1,5 +1,5 @@
-import UsersTable from '@/components/users/users-table'
+import UsersPageContent from "@/components/users/users-page-content";
 
 export default function UsersPage() {
-    return <UsersTable />
+  return <UsersPageContent />;
 }

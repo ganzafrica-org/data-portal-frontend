@@ -1,5 +1,5 @@
-import RequestForm from '@/components/requests/request-form'
+import RequestFormNew from "@/components/requests/request-form-new";
 
 export default function NewRequestPage() {
-    return <RequestForm mode="create" />
+  return <RequestFormNew mode="create" />;
 }

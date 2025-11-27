@@ -315,6 +315,102 @@ export const api = {
     return response.data.data!;
   },
 
+  createRequest: async (data: {
+    title: string;
+    description: string;
+    priority?: "low" | "normal" | "high" | "urgent";
+  }): Promise<Request> => {
+    const response = await apiClient.post<ApiResponse<Request>>(
+      "/requests",
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getRequestById: async (requestId: string): Promise<Request> => {
+    const response = await apiClient.get<ApiResponse<Request>>(
+      `/requests/${requestId}`,
+    );
+    return response.data.data!;
+  },
+
+  updateRequest: async (
+    requestId: string,
+    data: {
+      title?: string;
+      description?: string;
+      priority?: "low" | "normal" | "high" | "urgent";
+    },
+  ): Promise<Request> => {
+    const response = await apiClient.put<ApiResponse<Request>>(
+      `/requests/${requestId}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  addDatasetToRequest: async (
+    requestId: string,
+    data: {
+      datasetId: string;
+      dateRangeFrom?: string;
+      dateRangeTo?: string;
+      administrativeLevel?: any;
+      transactionTypes?: string[];
+      landUseTypes?: string[];
+      sizeRangeMin?: number;
+      sizeRangeMax?: number;
+      upiList?: string[];
+      idList?: string[];
+      additionalCriteria?: any;
+    },
+  ): Promise<RequestDataset> => {
+    const response = await apiClient.post<ApiResponse<RequestDataset>>(
+      `/requests/${requestId}/datasets`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  uploadDocumentToRequest: async (
+    requestId: string,
+    file: File,
+    category: "verification" | "research" | "authorization" | "other",
+  ): Promise<RequestDocument> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", category);
+
+    const response = await apiClient.post<ApiResponse<RequestDocument>>(
+      `/requests/${requestId}/documents`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data.data!;
+  },
+
+  deleteRequest: async (requestId: string): Promise<void> => {
+    await apiClient.delete(`/requests/${requestId}`);
+  },
+
+  removeDatasetFromRequest: async (
+    requestId: string,
+    datasetId: string,
+  ): Promise<void> => {
+    await apiClient.delete(`/requests/${requestId}/datasets/${datasetId}`);
+  },
+
+  getDatasetCategories: async (): Promise<any[]> => {
+    const response = await apiClient.get<ApiResponse<any[]>>(
+      "/dataset-categories",
+    );
+    return response.data.data!;
+  },
+
   // User Profile
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get<ApiResponse<User>>("/users/me");
@@ -329,6 +425,54 @@ export const api = {
     organizationEmail?: string;
   }): Promise<User> => {
     const response = await apiClient.put<ApiResponse<User>>("/users/me", data);
+    return response.data.data!;
+  },
+
+  // Users Management
+  getUsers: async (params: UsersQueryParams): Promise<UsersResponse> => {
+    const response = await apiClient.get<ApiResponse<UsersResponse>>("/users", {
+      params,
+    });
+    return response.data.data!;
+  },
+
+  getUserById: async (userId: string): Promise<User> => {
+    const response = await apiClient.get<ApiResponse<User>>(`/users/${userId}`);
+    return response.data.data!;
+  },
+
+  updateUser: async (
+    userId: string,
+    data: {
+      name?: string;
+      phone?: string;
+      address?: string;
+      organizationName?: string;
+      organizationEmail?: string;
+    },
+  ): Promise<User> => {
+    const response = await apiClient.put<ApiResponse<User>>(
+      `/users/${userId}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  updateUserPermissions: async (
+    userId: string,
+    permissions: Partial<UserPermissions>,
+  ): Promise<User> => {
+    const response = await apiClient.put<ApiResponse<User>>(
+      `/users/${userId}/permissions`,
+      permissions,
+    );
+    return response.data.data!;
+  },
+
+  verifyUser: async (userId: string): Promise<User> => {
+    const response = await apiClient.put<ApiResponse<User>>(
+      `/users/${userId}/verify`,
+    );
     return response.data.data!;
   },
 };
@@ -404,6 +548,25 @@ export interface RequestsQueryParams {
   endDate?: string;
   page?: number;
   limit?: number;
+}
+
+// ============================================================================
+// USERS TYPES
+// ============================================================================
+
+export interface UsersQueryParams {
+  role?: string;
+  userType?: string;
+  isVerified?: boolean;
+  isActive?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface UsersResponse {
+  users: User[];
+  pagination: PaginationMeta;
 }
 
 // ============================================================================
