@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useDebouncedCallback } from "use-debounce";
 import {
   Card,
   CardContent,
@@ -47,14 +48,22 @@ import {
   Eye,
   Building,
   User,
+  Save,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
-import { api, getErrorMessage } from "@/lib/api-config";
-import { TRANSACTION_TYPES, LAND_USE_TYPES } from "@/lib/dataset-config";
+import { api, getErrorMessage, type Request } from "@/lib/api-config";
+import {
+  DATASET_CATEGORIES,
+  TRANSACTION_TYPES,
+  LAND_USE_TYPES,
+} from "@/lib/dataset-config";
 import DateRangePicker from "@/components/date-range-picker";
 import AdministrativeLevelSelector from "@/components/administrative-level-selector";
 import MultiSelectDropdown from "@/components/multi-select-dropdown";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface DatasetSelection {
   id: string;
@@ -62,11 +71,13 @@ interface DatasetSelection {
   type: string;
   criteria: Record<string, any>;
   isOpen: boolean;
+  datasetId?: string; // Backend dataset ID
 }
 
 interface RequestFormProps {
   mode: "create" | "edit";
-  initialData?: DataRequest;
+  requestId?: string;
+  initialData?: Request;
 }
 
 interface FileWithCategory {
@@ -85,10 +96,12 @@ const UpiInput = ({
   value,
   onChange,
   placeholder,
+  disabled = false,
 }: {
   value: string[];
   onChange: (upis: string[]) => void;
   placeholder: string;
+  disabled?: boolean;
 }) => {
   const [inputValue, setInputValue] = useState("");
 
@@ -130,7 +143,7 @@ const UpiInput = ({
         const lines = csvContent.split("\n");
         const upis = lines
           .map((line) => line.trim())
-          .filter((line) => line && !line.startsWith("UPI")) // Skip headers
+          .filter((line) => line && !line.startsWith("UPI"))
           .filter((upi) => !value.includes(upi));
 
         onChange([...value, ...upis]);
@@ -152,12 +165,13 @@ const UpiInput = ({
           onPaste={handlePaste}
           placeholder={placeholder}
           className="flex-1"
+          disabled={disabled}
         />
         <Button
           type="button"
           onClick={addUpi}
           size="sm"
-          disabled={!inputValue.trim()}
+          disabled={!inputValue.trim() || disabled}
         >
           Add
         </Button>
@@ -170,12 +184,14 @@ const UpiInput = ({
           onChange={handleCsvUpload}
           className="hidden"
           id="csv-upload"
+          disabled={disabled}
         />
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => document.getElementById("csv-upload")?.click()}
+          disabled={disabled}
         >
           <Upload className="h-3 w-3 mr-1" />
           Upload CSV
@@ -193,8 +209,7 @@ const UpiInput = ({
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        Enter UPIs manually, paste multiple UPIs, or upload a CSV file with UPI
-        column
+        Enter UPIs manually, paste multiple UPIs, or upload a CSV file
       </p>
     </div>
   );
@@ -284,20 +299,47 @@ const DatasetPreview = ({ dataset }: { dataset: any }) => {
   );
 };
 
-export default function RequestForm({ mode, initialData }: RequestFormProps) {
+export default function RequestForm({
+  mode,
+  requestId: initialRequestId,
+  initialData,
+}: RequestFormProps) {
   const { user, getUserDisplayInfo, getRequiredDocuments } = useAuth();
   const router = useRouter();
+
+  const [requestId, setRequestId] = useState<string | undefined>(
+    initialRequestId,
+  );
+  const [status, setStatus] = useState<Request["status"]>(
+    initialData?.status || "draft",
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     title: initialData?.title || "",
     description: initialData?.description || "",
+    priority: (initialData?.priority || "normal") as
+      | "low"
+      | "normal"
+      | "high"
+      | "urgent",
   });
 
   const [datasetSelections, setDatasetSelections] = useState<
     DatasetSelection[]
   >([]);
   const [uploadedFiles, setUploadedFiles] = useState<FileWithCategory[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [adminNotes, setAdminNotes] = useState<string | null>(
+    initialData?.adminNotes || null,
+  );
+
+  // Conditional rendering logic
+  const isDraftCreated = !!requestId || !!initialData?.id;
+  const canEdit =
+    status === "draft" ||
+    status === "changes_requested" ||
+    (mode === "create" && !status);
 
   if (!user) return null;
 
@@ -314,7 +356,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
               !dataset.id.includes("admin-")
             );
           }
-          return true; // Internal users can access all
+          return true;
         });
 
         if (filteredDatasets.length > 0) {
@@ -329,6 +371,58 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
   };
 
   const availableDatasets = getAvailableDatasets();
+
+  // Auto-save draft on changes (debounced)
+  const debouncedSaveDraft = useDebouncedCallback(async () => {
+    if (requestId && status === "draft" && canEdit && isDraftCreated) {
+      try {
+        setIsSaving(true);
+        await api.updateDraftRequest(requestId, formData);
+      } catch (error) {
+        console.error("Auto-save failed:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  }, 2000);
+
+  useEffect(() => {
+    if (requestId && status === "draft" && canEdit) {
+      debouncedSaveDraft();
+    }
+  }, [formData, requestId, status, canEdit, debouncedSaveDraft]);
+
+  // Step 1: Create Draft (only basic info)
+  const handleCreateDraft = async () => {
+    if (!formData.title.trim()) {
+      toast.error("Please enter a title for your request");
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      toast.error("Please enter a description for your request");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const draft = await api.createDraftRequest({
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+      });
+
+      setRequestId(draft.id);
+      setStatus("draft");
+      router.replace(`/requests/new?id=${draft.id}`);
+
+      toast.success("Draft saved! Now configure your datasets.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const addDatasetSelection = () => {
     const newSelection: DatasetSelection = {
@@ -347,7 +441,17 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     setDatasetSelections([...updatedSelections, newSelection]);
   };
 
-  const removeDatasetSelection = (id: string) => {
+  const removeDatasetSelection = async (id: string, datasetId?: string) => {
+    // If dataset already saved to backend, delete it
+    if (datasetId && requestId) {
+      try {
+        await api.removeDatasetFromRequest(requestId, datasetId);
+        toast.success("Dataset removed");
+      } catch (error) {
+        toast.error(getErrorMessage(error));
+        return;
+      }
+    }
     setDatasetSelections(
       datasetSelections.filter((selection) => selection.id !== id),
     );
@@ -393,6 +497,73 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     );
   };
 
+  // Save dataset to backend when configuration is complete
+  const saveDatasetToBackend = async (selection: DatasetSelection) => {
+    if (!requestId || !selection.type) return;
+
+    const category =
+      availableDatasets[selection.category as keyof typeof availableDatasets];
+    const dataset = category?.datasets.find((d) => d.id === selection.type);
+
+    if (!dataset) return;
+
+    try {
+      const criteria: any = {
+        datasetId: selection.type,
+      };
+
+      if (selection.criteria.dateRange?.from) {
+        criteria.dateRangeFrom =
+          selection.criteria.dateRange.from.toISOString();
+        if (selection.criteria.dateRange.to) {
+          criteria.dateRangeTo = selection.criteria.dateRange.to.toISOString();
+        }
+      }
+
+      if (selection.criteria.upiList?.length > 0) {
+        criteria.upiList = selection.criteria.upiList;
+      }
+
+      if (selection.criteria.idList?.length > 0) {
+        criteria.idList = selection.criteria.idList;
+      }
+
+      if (selection.criteria.transactionTypes?.length > 0) {
+        criteria.transactionTypes = selection.criteria.transactionTypes;
+      }
+
+      if (selection.criteria.landUseTypes?.length > 0) {
+        criteria.landUseTypes = selection.criteria.landUseTypes;
+      }
+
+      if (selection.criteria.minSize) {
+        criteria.sizeRangeMin = parseFloat(selection.criteria.minSize);
+      }
+
+      if (selection.criteria.maxSize) {
+        criteria.sizeRangeMax = parseFloat(selection.criteria.maxSize);
+      }
+
+      if (selection.criteria.administrativeSelection) {
+        criteria.administrativeLevel =
+          selection.criteria.administrativeSelection;
+      }
+
+      const savedDataset = await api.addDatasetToRequest(requestId, criteria);
+
+      // Update local state with backend ID
+      setDatasetSelections((selections) =>
+        selections.map((s) =>
+          s.id === selection.id ? { ...s, datasetId: savedDataset.id } : s,
+        ),
+      );
+
+      toast.success("Dataset configuration saved");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
   const renderDatasetCategoryCard = (
     selection: DatasetSelection,
     index: number,
@@ -428,8 +599,9 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeDatasetSelection(selection.id);
+                    removeDatasetSelection(selection.id, selection.datasetId);
                   }}
+                  disabled={!canEdit}
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -454,6 +626,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                     onValueChange={(value) =>
                       updateDatasetSelection(selection.id, "category", value)
                     }
+                    disabled={!canEdit}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a data category" />
@@ -506,10 +679,10 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                   </div>
                   <Select
                     value={selection.type}
-                    onValueChange={(value) =>
-                      updateDatasetSelection(selection.id, "type", value)
-                    }
-                    disabled={!selection.category}
+                    onValueChange={(value) => {
+                      updateDatasetSelection(selection.id, "type", value);
+                    }}
+                    disabled={!selection.category || !canEdit}
                   >
                     <SelectTrigger className="max-w-64 overflow-x-clip">
                       <SelectValue placeholder="Select specific dataset" />
@@ -564,6 +737,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                               adminSelection,
                             )
                           }
+                          disabled={!canEdit}
                         />
                       </div>
                     )}
@@ -584,6 +758,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                             )
                           }
                           placeholder="Select transaction types"
+                          disabled={!canEdit}
                         />
                       </div>
                     )}
@@ -602,6 +777,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                             )
                           }
                           placeholder="Select land use types"
+                          disabled={!canEdit}
                         />
                       </div>
                     )}
@@ -622,6 +798,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                               )
                             }
                             placeholder="Min size"
+                            disabled={!canEdit}
                           />
                           <Input
                             type="number"
@@ -635,6 +812,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                               )
                             }
                             placeholder="Max size"
+                            disabled={!canEdit}
                           />
                         </div>
                       </div>
@@ -653,6 +831,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                             )
                           }
                           placeholder="Enter user ID"
+                          disabled={!canEdit}
                         />
                       </div>
                     )}
@@ -661,7 +840,9 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                   <div className="space-y-4">
                     {dataset.requiresPeriod && (
                       <div className="space-y-2">
-                        <Label>Date Period *</Label>
+                        <Label>
+                          Date Period <span className="text-red-500">*</span>
+                        </Label>
                         <DateRangePicker
                           dateRange={selection.criteria.dateRange}
                           onDateRangeChange={(range) =>
@@ -671,24 +852,27 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                               range,
                             )
                           }
+                          disabled={!canEdit}
                         />
                       </div>
                     )}
 
                     {(dataset.requiresUpi || dataset.requiresUpiList) && (
                       <div className="space-y-2">
-                        <Label>UPI List *</Label>
+                        <Label>
+                          UPI List <span className="text-red-500">*</span>
+                        </Label>
                         <UpiInput
                           value={selection.criteria.upiList || []}
                           onChange={(upis) =>
                             updateDatasetCriteria(selection.id, "upiList", upis)
                           }
                           placeholder="Enter UPI (e.g., 3/01/11/01/88)"
+                          disabled={!canEdit}
                         />
                         {dataset.requiresUpi && (
                           <p className="text-sm text-muted-foreground">
-                            At least one UPI is required for shapefile
-                            generation
+                            At least one UPI is required
                           </p>
                         )}
                       </div>
@@ -696,13 +880,17 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
                     {dataset.requiresIdList && (
                       <div className="space-y-2">
-                        <Label>National ID List *</Label>
+                        <Label>
+                          National ID List{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
                         <UpiInput
                           value={selection.criteria.idList || []}
                           onChange={(ids) =>
                             updateDatasetCriteria(selection.id, "idList", ids)
                           }
                           placeholder="Enter National ID"
+                          disabled={!canEdit}
                         />
                         <p className="text-sm text-muted-foreground">
                           Upload a CSV file with IDs or enter them manually
@@ -710,6 +898,21 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                       </div>
                     )}
                   </div>
+
+                  {canEdit &&
+                    isDraftCreated &&
+                    selection.type &&
+                    !selection.datasetId && (
+                      <Button
+                        type="button"
+                        onClick={() => saveDatasetToBackend(selection)}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Dataset Configuration
+                      </Button>
+                    )}
                 </div>
               )}
             </CardContent>
@@ -719,28 +922,25 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     );
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    const filesWithCategory = files.map((file) => ({
-      file,
-      category: "other" as const,
-    }));
-    setUploadedFiles((prev) => [...prev, ...filesWithCategory]);
-  };
-
-  const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateFileCategory = (
-    index: number,
-    category: "verification" | "research" | "authorization" | "other",
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    setUploadedFiles((prev) =>
-      prev.map((fileObj, i) =>
-        i === index ? { ...fileObj, category } : fileObj,
-      ),
-    );
+    if (!requestId) {
+      toast.error("Please save the basic information first");
+      return;
+    }
+
+    const files = Array.from(event.target.files || []);
+
+    for (const file of files) {
+      try {
+        await api.uploadDocumentToRequest(requestId, file, "other");
+      } catch (error) {
+        toast.error(`Failed to upload ${file.name}: ${getErrorMessage(error)}`);
+      }
+    }
+
+    toast.success(`${files.length} file(s) uploaded successfully`);
   };
 
   const validateForm = () => {
@@ -762,6 +962,11 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
     for (const selection of datasetSelections) {
       if (!selection.category || !selection.type) {
         toast.error("Please complete all dataset selections");
+        return false;
+      }
+
+      if (!selection.datasetId) {
+        toast.error("Please save all dataset configurations before submitting");
         return false;
       }
 
@@ -805,36 +1010,36 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
       }
     }
 
-    const requiredDocs = requiredDocuments.filter((doc) => doc.required);
-    if (
-      user.role === "external" &&
-      requiredDocs.length > 0 &&
-      uploadedFiles.length === 0 &&
-      mode === "create"
-    ) {
-      toast.error("Please upload required supporting documents");
-      return false;
-    }
-
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    setIsSubmitting(true);
+  const handleSubmit = async () => {
+    if (!validateForm() || !requestId) return;
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      setIsSubmitting(true);
+      await api.submitRequest(requestId);
 
-      const action = mode === "create" ? "created" : "updated";
-      toast.success(`Request ${action} successfully`);
-      router.push("/requests");
-    } catch (error: any) {
-      toast.error(`Failed to ${mode} request`);
-      console.error("Error submitting request:", error);
+      toast.success("Request submitted for review!");
+      router.push(`/requests/${requestId}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResubmit = async () => {
+    if (!validateForm() || !requestId) return;
+
+    try {
+      setIsSubmitting(true);
+      await api.resubmitRequest(requestId);
+
+      toast.success("Request resubmitted for review!");
+      router.push(`/requests/${requestId}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -842,17 +1047,60 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          {mode === "create" ? "Create New Data Request" : "Edit Data Request"}
-        </h1>
-        <p className="text-gray-600">
-          {mode === "create"
-            ? "Submit a request to access land administration data with specific criteria"
-            : "Update your data request details and configuration"}
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {mode === "create"
+              ? "Create New Data Request"
+              : "Edit Data Request"}
+          </h1>
+          <p className="text-gray-600">
+            {mode === "create"
+              ? "Submit a request to access land administration data with specific criteria"
+              : "Update your data request details and configuration"}
+          </p>
+        </div>
+        {isSaving && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Save className="h-4 w-4 animate-pulse" />
+            Saving...
+          </div>
+        )}
       </div>
 
+      {/* Status Badge */}
+      {isDraftCreated && (
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={
+              status === "draft"
+                ? "secondary"
+                : status === "changes_requested"
+                  ? "destructive"
+                  : "default"
+            }
+          >
+            {status === "draft" && "Draft"}
+            {status === "pending" && "Pending Review"}
+            {status === "in_review" && "In Review"}
+            {status === "changes_requested" && "Changes Requested"}
+            {status === "approved" && "Approved"}
+            {status === "rejected" && "Rejected"}
+          </Badge>
+        </div>
+      )}
+
+      {/* Changes Requested Alert */}
+      {status === "changes_requested" && adminNotes && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Changes Requested</AlertTitle>
+          <AlertDescription>{adminNotes}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* User Info Card */}
       <Card className="bg-blue p-4 text-white">
         <CardContent className="flex items-center space-x-4">
           <div className="p-3 bg-white/20 rounded-lg">
@@ -872,47 +1120,97 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
         </CardContent>
       </Card>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Provide basic details about your data request
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="title">Request Title *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, title: e.target.value }))
-                }
-                placeholder="e.g., Land Use Analysis for Kigali District"
-                required
-              />
-            </div>
+      {/* Basic Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Basic Information</CardTitle>
+          <CardDescription>
+            Provide basic details about your data request
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="title">
+              Request Title <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, title: e.target.value }))
+              }
+              placeholder="e.g., Land Use Analysis for Kigali District"
+              required
+              disabled={!canEdit}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }))
-                }
-                placeholder="Describe the purpose of your data request and how the data will be used..."
-                rows={4}
-                required
-              />
-            </div>
-          </CardContent>
-        </Card>
+          <div className="space-y-2">
+            <Label htmlFor="description">
+              Description <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+              placeholder="Describe the purpose of your data request and how the data will be used..."
+              rows={4}
+              required
+              disabled={!canEdit}
+            />
+          </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="priority">Priority Level</Label>
+            <Select
+              value={formData.priority}
+              onValueChange={(value: any) =>
+                setFormData((prev) => ({ ...prev, priority: value }))
+              }
+              disabled={!canEdit}
+            >
+              <SelectTrigger id="priority">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low - Standard processing</SelectItem>
+                <SelectItem value="normal">
+                  Normal - Regular timeline
+                </SelectItem>
+                <SelectItem value="high">High - Expedited review</SelectItem>
+                <SelectItem value="urgent">
+                  Urgent - Immediate attention needed
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {!isDraftCreated && (
+            <Button
+              onClick={handleCreateDraft}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating Draft...
+                </>
+              ) : (
+                "Save & Continue to Datasets"
+              )}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dataset Selection */}
+      {isDraftCreated && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -939,6 +1237,7 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                   type="button"
                   onClick={addDatasetSelection}
                   className="inline-flex items-center"
+                  disabled={!canEdit}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Dataset
@@ -950,20 +1249,25 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
                   renderDatasetCategoryCard(selection, index),
                 )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addDatasetSelection}
-                  className="w-full border-dashed border-2"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Another Dataset
-                </Button>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addDatasetSelection}
+                    className="w-full border-dashed border-2"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Another Dataset
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+      )}
 
+      {/* Supporting Documents */}
+      {isDraftCreated && (
         <Card>
           <CardHeader>
             <CardTitle>Supporting Documents</CardTitle>
@@ -1000,105 +1304,141 @@ export default function RequestForm({ mode, initialData }: RequestFormProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="file-upload">Upload Documents</Label>
-              <div className="mt-1">
-                <Input
-                  id="file-upload"
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.csv,.xlsx"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("file-upload")?.click()
-                  }
-                  className="w-full h-20 border-dashed border-2 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex flex-col items-center">
-                    <Upload className="h-6 w-6 mb-2" />
-                    <span>Choose Files or Drag & Drop</span>
-                    <span className="text-xs text-muted-foreground">
-                      PDF, DOC, DOCX, JPG, PNG, CSV, XLSX (Max 10MB each)
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            </div>
-
-            {uploadedFiles.length > 0 && (
+            {canEdit && (
               <div className="space-y-2">
-                <Label>Uploaded Files ({uploadedFiles.length})</Label>
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {uploadedFiles.map((fileObj, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
-                    >
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {fileObj.file.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(fileObj.file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFile(idx)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                <Label htmlFor="file-upload">Upload Documents</Label>
+                <div className="mt-1">
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.csv,.xlsx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("file-upload")?.click()
+                    }
+                    className="w-full h-20 border-dashed border-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex flex-col items-center">
+                      <Upload className="h-6 w-6 mb-2" />
+                      <span>Choose Files or Drag & Drop</span>
+                      <span className="text-xs text-muted-foreground">
+                        PDF, DOC, DOCX, JPG, PNG, CSV, XLSX (Max 10MB each)
+                      </span>
                     </div>
-                  ))}
+                  </Button>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
+      )}
 
-        <div className="flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4 pb-8">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full sm:w-auto bg-green hover:bg-green/90"
-          >
-            {isSubmitting ? (
+      {/* Submit Actions */}
+      {isDraftCreated && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Review & Submit</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {status === "draft" && canEdit && (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                {mode === "create"
-                  ? "Creating Request..."
-                  : "Updating Request..."}
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Review your request before submitting. Once submitted, you
+                    won't be able to edit until reviewed by our team.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push("/requests")}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto"
+                  >
+                    Save & Exit
+                  </Button>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || datasetSelections.length === 0}
+                    className="w-full sm:w-auto bg-green hover:bg-green/90"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Submit for Review
+                      </>
+                    )}
+                  </Button>
+                </div>
               </>
-            ) : mode === "create" ? (
-              "Submit Request"
-            ) : (
-              "Update Request"
             )}
-          </Button>
-        </div>
-      </form>
+
+            {status === "changes_requested" && canEdit && (
+              <>
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Make the requested changes and resubmit your request for
+                    review.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="flex flex-col sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push("/requests")}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto"
+                  >
+                    Save & Exit
+                  </Button>
+                  <Button
+                    onClick={handleResubmit}
+                    disabled={isSubmitting || datasetSelections.length === 0}
+                    className="w-full sm:w-auto bg-green hover:bg-green/90"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Resubmitting...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Resubmit for Review
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {!canEdit && status !== "draft" && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  This request is currently being reviewed and cannot be edited.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

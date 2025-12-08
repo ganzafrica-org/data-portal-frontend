@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getErrorMessage } from "@/lib/api-config";
-import DatasetDialog from "./dataset-dialog";
 
 export default function DatasetsTab() {
   const router = useRouter();
@@ -44,9 +43,6 @@ export default function DatasetsTab() {
   const [datasets, setDatasets] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedDataset, setSelectedDataset] = useState<any | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 12,
@@ -161,15 +157,11 @@ export default function DatasetsTab() {
   };
 
   const handleAddDataset = () => {
-    setSelectedDataset(null);
-    setIsEditing(false);
-    setIsDialogOpen(true);
+    router.push("/configuration/datasets/new");
   };
 
   const handleEditDataset = (dataset: any) => {
-    setSelectedDataset(dataset);
-    setIsEditing(true);
-    setIsDialogOpen(true);
+    router.push(`/configuration/datasets/new?id=${dataset.id}&mode=edit`);
   };
 
   const handleToggleStatus = async (dataset: any) => {
@@ -500,15 +492,6 @@ export default function DatasetsTab() {
           )}
         </>
       )}
-
-      <DatasetDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        dataset={selectedDataset}
-        categories={categories}
-        onSuccess={fetchData}
-        isEditing={isEditing}
-      />
     </>
   );
 }

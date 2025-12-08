@@ -315,6 +315,59 @@ export const api = {
     return response.data.data!;
   },
 
+  // Draft management
+  createDraftRequest: async (data: {
+    title: string;
+    description: string;
+    priority?: "low" | "normal" | "high" | "urgent";
+  }): Promise<Request> => {
+    const response = await apiClient.post<ApiResponse<Request>>("/requests", {
+      ...data,
+      status: "draft",
+    });
+    return response.data.data!;
+  },
+
+  updateDraftRequest: async (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      priority?: "low" | "normal" | "high" | "urgent";
+    },
+  ): Promise<Request> => {
+    const response = await apiClient.put<ApiResponse<Request>>(
+      `/requests/${id}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  submitRequest: async (id: string): Promise<Request> => {
+    const response = await apiClient.put<ApiResponse<Request>>(
+      `/requests/${id}/status`,
+      { status: "pending" },
+    );
+    return response.data.data!;
+  },
+
+  // Admin actions
+  requestChanges: async (id: string, notes: string): Promise<Request> => {
+    const response = await apiClient.put<ApiResponse<Request>>(
+      `/requests/${id}/status`,
+      { status: "changes_requested", adminNotes: notes },
+    );
+    return response.data.data!;
+  },
+
+  resubmitRequest: async (id: string): Promise<Request> => {
+    const response = await apiClient.put<ApiResponse<Request>>(
+      `/requests/${id}/status`,
+      { status: "pending" },
+    );
+    return response.data.data!;
+  },
+
   createRequest: async (data: {
     title: string;
     description: string;
@@ -480,6 +533,9 @@ export const api = {
     hasSizeRange?: boolean;
     fields?: any;
     criteria?: any;
+    requiresApproval?: boolean;
+    autoApproveForRoles?: string[];
+    allowsRecurring?: boolean;
   }): Promise<any> => {
     const response = await apiClient.post<ApiResponse<any>>("/datasets", data);
     return response.data.data!;
@@ -502,6 +558,9 @@ export const api = {
       hasSizeRange?: boolean;
       fields?: any;
       criteria?: any;
+      requiresApproval?: boolean;
+      autoApproveForRoles?: string[];
+      allowsRecurring?: boolean;
       deactivatedAt?: string | null;
     },
   ): Promise<any> => {
@@ -656,6 +715,100 @@ export const api = {
     });
     return response.data.data!;
   },
+
+  createExport: async (data: {
+    requestId: string;
+    exportFormat: "csv" | "xlsx" | "json" | "shapefile" | "pdf";
+    exportType: string;
+    datasetInfo?: any;
+    expiresInDays?: number;
+  }): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>("/exports", data);
+    return response.data.data!;
+  },
+
+  downloadExport: async (exportId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/exports/${exportId}/download`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  // Comments
+  getRequestComments: async (requestId: string): Promise<RequestComment[]> => {
+    const response = await apiClient.get<ApiResponse<RequestComment[]>>(
+      `/requests/${requestId}/comments`,
+    );
+    return response.data.data!;
+  },
+
+  addComment: async (
+    requestId: string,
+    data: {
+      comment: string;
+      isInternal?: boolean;
+      parentCommentId?: string;
+    },
+  ): Promise<RequestComment> => {
+    const response = await apiClient.post<ApiResponse<RequestComment>>(
+      `/requests/${requestId}/comments`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  updateComment: async (
+    requestId: string,
+    commentId: string,
+    data: {
+      comment: string;
+    },
+  ): Promise<RequestComment> => {
+    const response = await apiClient.put<ApiResponse<RequestComment>>(
+      `/requests/${requestId}/comments/${commentId}`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  deleteComment: async (
+    requestId: string,
+    commentId: string,
+  ): Promise<void> => {
+    await apiClient.delete(`/requests/${requestId}/comments/${commentId}`);
+  },
+
+  // Documents
+  getRequestDocuments: async (
+    requestId: string,
+  ): Promise<RequestDocument[]> => {
+    const response = await apiClient.get<ApiResponse<RequestDocument[]>>(
+      `/requests/${requestId}/documents`,
+    );
+    return response.data.data!;
+  },
+
+  deleteDocument: async (documentId: string): Promise<void> => {
+    await apiClient.delete(`/documents/${documentId}`);
+  },
+
+  downloadDocument: async (documentId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/documents/${documentId}/download`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  verifyDocument: async (
+    documentId: string,
+    data: { isVerified: boolean },
+  ): Promise<RequestDocument> => {
+    const response = await apiClient.put<ApiResponse<RequestDocument>>(
+      `/documents/${documentId}/verify`,
+      data,
+    );
+    return response.data.data!;
+  },
 };
 
 // ============================================================================
@@ -667,6 +820,33 @@ export interface RequestDocument {
   originalFilename: string;
   category: string;
   isVerified: boolean;
+  storedFilename?: string;
+  mimeType?: string;
+  fileSize?: number;
+  uploadedAt?: string;
+  uploader?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface RequestComment {
+  id: string;
+  requestId: string;
+  userId: string;
+  comment: string;
+  isInternal: boolean;
+  parentCommentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  replies?: RequestComment[];
 }
 
 export interface RequestDataset {
@@ -683,13 +863,21 @@ export interface RequestDataset {
 
 export interface Request {
   id: string;
-  requestNumber: string;
+  requestNumber: string | null;
   title: string;
   description: string | null;
-  status: "pending" | "approved" | "rejected" | "in_review" | "resubmitted";
+  status:
+    | "draft"
+    | "pending"
+    | "in_review"
+    | "changes_requested"
+    | "partially_approved"
+    | "approved"
+    | "rejected";
   priority: "low" | "normal" | "high" | "urgent";
   createdAt: string;
   updatedAt: string;
+  submittedAt: string | null;
   approvedAt: string | null;
   adminNotes: string | null;
   rejectionReason: string | null;
