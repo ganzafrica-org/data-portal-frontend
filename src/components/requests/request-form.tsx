@@ -403,37 +403,32 @@ export default function RequestForm({
     const loadDatasetCategories = async () => {
       try {
         setIsLoadingDatasets(true);
-        const categories = await api.getDatasetCategories({
-          includeInactive: false,
-        });
+        const categories = await api.getDatasetCategories();
 
-        // Filter out deactivated categories and datasets
+        // Map categories and datasets
         const activeCategories = categories
-          .filter((cat: any) => !cat.deactivatedAt)
           .map((cat: any) => ({
             id: cat.id,
             name: cat.name,
             icon: cat.icon,
             description: cat.description,
             sortOrder: cat.sortOrder,
-            datasets: cat.datasets
-              .filter((ds: any) => !ds.deactivatedAt)
-              .map((ds: any) => ({
-                id: ds.id,
-                name: ds.name,
-                description: ds.description || "",
-                requiresPeriod: ds.requiresPeriod,
-                requiresUpiList: ds.requiresUpiList,
-                requiresIdList: ds.requiresIdList,
-                requiresUpi: ds.requiresUpi,
-                hasAdminLevel: ds.hasAdminLevel,
-                hasUserLevel: ds.hasUserLevel,
-                hasTransactionType: ds.hasTransactionType,
-                hasLandUse: ds.hasLandUse,
-                hasSizeRange: ds.hasSizeRange,
-                fields: ds.fields,
-                criteria: ds.criteria,
-              })),
+            datasets: cat.datasets.map((ds: any) => ({
+              id: ds.id,
+              name: ds.name,
+              description: ds.description || "",
+              requiresPeriod: ds.requiresPeriod,
+              requiresUpiList: ds.requiresUpiList,
+              requiresIdList: ds.requiresIdList,
+              requiresUpi: ds.requiresUpi,
+              hasAdminLevel: ds.hasAdminLevel,
+              hasUserLevel: ds.hasUserLevel,
+              hasTransactionType: ds.hasTransactionType,
+              hasLandUse: ds.hasLandUse,
+              hasSizeRange: ds.hasSizeRange,
+              fields: ds.fields,
+              criteria: ds.criteria,
+            })),
           }))
           .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
 
@@ -472,6 +467,94 @@ export default function RequestForm({
       loadDocuments();
     }
   }, [requestId, mode]);
+
+  // Load existing datasets when editing
+  const datasetsLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      initialData &&
+      initialData.datasets &&
+      initialData.datasets.length > 0 &&
+      datasetCategories.length > 0 &&
+      !datasetsLoadedRef.current
+    ) {
+      // Mark as loaded to prevent re-running
+      datasetsLoadedRef.current = true;
+
+      // Convert backend datasets to frontend DatasetSelection format
+      const loadedSelections: DatasetSelection[] = initialData.datasets.map(
+        (rd, index) => {
+          const criteria = rd.criteria || {};
+
+          // Find the category for this dataset by searching in datasetCategories
+          let categoryId = "";
+          for (const category of datasetCategories) {
+            if (category.datasets.some((ds: any) => ds.id === rd.datasetId)) {
+              categoryId = category.id;
+              break;
+            }
+          }
+
+          // Parse the criteria from backend format
+          const parsedCriteria: Record<string, any> = {};
+
+          if (criteria.dateRangeFrom) {
+            parsedCriteria.dateRange = {
+              from: new Date(criteria.dateRangeFrom),
+              to: criteria.dateRangeTo
+                ? new Date(criteria.dateRangeTo)
+                : new Date(),
+            };
+          }
+
+          if (criteria.upiList) {
+            parsedCriteria.upiList = criteria.upiList;
+          }
+
+          if (criteria.idList) {
+            parsedCriteria.idList = criteria.idList;
+          }
+
+          if (criteria.transactionTypes) {
+            parsedCriteria.transactionTypes = criteria.transactionTypes;
+          }
+
+          if (criteria.landUseTypes) {
+            parsedCriteria.landUseTypes = criteria.landUseTypes;
+          }
+
+          if (criteria.sizeRangeMin !== undefined) {
+            parsedCriteria.minSize = criteria.sizeRangeMin.toString();
+          }
+
+          if (criteria.sizeRangeMax !== undefined) {
+            parsedCriteria.maxSize = criteria.sizeRangeMax.toString();
+          }
+
+          if (criteria.administrativeLevel) {
+            parsedCriteria.administrativeSelection =
+              criteria.administrativeLevel;
+          }
+
+          if (criteria.userId) {
+            parsedCriteria.userId = criteria.userId;
+          }
+
+          return {
+            id: `loaded-${index}-${Date.now()}`,
+            category: categoryId,
+            type: rd.datasetId,
+            criteria: parsedCriteria,
+            isOpen: false,
+            datasetId: rd.id, // Backend RequestDataset ID
+          };
+        },
+      );
+
+      setDatasetSelections(loadedSelections);
+    }
+  }, [initialData, datasetCategories]);
 
   // Auto-save draft on changes (debounced)
   const saveDraftTimeoutRef = useRef<NodeJS.Timeout | null>(null);

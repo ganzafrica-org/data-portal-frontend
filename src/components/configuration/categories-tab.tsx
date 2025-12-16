@@ -62,7 +62,7 @@ export default function CategoriesTab() {
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
-      const data = await api.getDatasetCategories({ includeInactive: true });
+      const data = await api.getDatasetCategories();
       setCategories(data);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -84,12 +84,7 @@ export default function CategoriesTab() {
       );
     }
 
-    // Apply status filter
-    if (filterStatus === "active") {
-      filtered = filtered.filter((cat) => !cat.deactivatedAt);
-    } else if (filterStatus === "inactive") {
-      filtered = filtered.filter((cat) => cat.deactivatedAt);
-    }
+    // Status filter removed - no longer tracking active/inactive
 
     setFilteredCategories(filtered);
   };
@@ -192,19 +187,6 @@ export default function CategoriesTab() {
                 className="pl-10"
               />
             </div>
-            <Select
-              value={filterStatus}
-              onValueChange={(v) => updateURLParams("status", v)}
-            >
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -234,13 +216,8 @@ export default function CategoriesTab() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredCategories.map((category) => {
-            const isActive = !category.deactivatedAt;
-
             return (
-              <Card
-                key={category.id}
-                className={`${!isActive ? "opacity-75" : ""}`}
-              >
+              <Card key={category.id}>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -252,15 +229,6 @@ export default function CategoriesTab() {
                       </CardTitle>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {isActive ? (
-                        <Badge className="bg-green-100 text-green-800 border-green-200">
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-                          Inactive
-                        </Badge>
-                      )}
                       <Badge variant="outline">
                         {category.datasets?.length || 0} datasets
                       </Badge>

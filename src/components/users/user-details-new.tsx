@@ -184,13 +184,40 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
     permission: keyof typeof formData.permissions,
     checked: boolean,
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      permissions: {
+    setFormData((prev) => {
+      const newPermissions = {
         ...prev.permissions,
         [permission]: checked,
-      },
-    }));
+      };
+
+      // Auto-check related permissions based on business rules
+      if (permission === "isReviewer") {
+        if (checked) {
+          // When isReviewer is checked, also check canApproveRequests and canDelegateReviews
+          newPermissions.canApproveRequests = true;
+          newPermissions.canDelegateReviews = true;
+        } else {
+          // When isReviewer is unchecked, also uncheck canDelegateReviews
+          // But keep canApproveRequests as it can exist independently
+          newPermissions.canDelegateReviews = false;
+        }
+      }
+
+      // Prevent unchecking canApproveRequests if user is a reviewer
+      if (
+        permission === "canApproveRequests" &&
+        !checked &&
+        newPermissions.isReviewer
+      ) {
+        // Don't allow unchecking canApproveRequests if isReviewer is true
+        newPermissions.canApproveRequests = true;
+      }
+
+      return {
+        ...prev,
+        permissions: newPermissions,
+      };
+    });
   };
 
   const handleDatasetToggle = (datasetId: string) => {

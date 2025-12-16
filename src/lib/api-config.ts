@@ -463,7 +463,6 @@ export const api = {
   },
 
   getDatasetCategories: async (params?: {
-    includeInactive?: boolean;
     search?: string;
   }): Promise<any[]> => {
     const response = await apiClient.get<ApiResponse<any[]>>(
@@ -493,7 +492,6 @@ export const api = {
       icon?: string;
       description?: string;
       sortOrder?: number;
-      deactivatedAt?: string | null;
     },
   ): Promise<any> => {
     const response = await apiClient.put<ApiResponse<any>>(
@@ -505,7 +503,6 @@ export const api = {
 
   getDatasets: async (params?: {
     categoryId?: string;
-    includeInactive?: boolean;
     search?: string;
     page?: number;
     limit?: number;
@@ -566,7 +563,6 @@ export const api = {
       requiresApproval?: boolean;
       autoApproveForRoles?: string[];
       allowsRecurring?: boolean;
-      deactivatedAt?: string | null;
     },
   ): Promise<any> => {
     const response = await apiClient.put<ApiResponse<any>>(
@@ -737,50 +733,6 @@ export const api = {
       responseType: "blob",
     });
     return response.data;
-  },
-
-  // Comments
-  getRequestComments: async (requestId: string): Promise<RequestComment[]> => {
-    const response = await apiClient.get<ApiResponse<RequestComment[]>>(
-      `/requests/${requestId}/comments`,
-    );
-    return response.data.data!;
-  },
-
-  addComment: async (
-    requestId: string,
-    data: {
-      comment: string;
-      isInternal?: boolean;
-      parentCommentId?: string;
-    },
-  ): Promise<RequestComment> => {
-    const response = await apiClient.post<ApiResponse<RequestComment>>(
-      `/requests/${requestId}/comments`,
-      data,
-    );
-    return response.data.data!;
-  },
-
-  updateComment: async (
-    requestId: string,
-    commentId: string,
-    data: {
-      comment: string;
-    },
-  ): Promise<RequestComment> => {
-    const response = await apiClient.put<ApiResponse<RequestComment>>(
-      `/requests/${requestId}/comments/${commentId}`,
-      data,
-    );
-    return response.data.data!;
-  },
-
-  deleteComment: async (
-    requestId: string,
-    commentId: string,
-  ): Promise<void> => {
-    await apiClient.delete(`/requests/${requestId}/comments/${commentId}`);
   },
 
   // Documents
@@ -1018,24 +970,6 @@ export interface RequestDocument {
   };
 }
 
-export interface RequestComment {
-  id: string;
-  requestId: string;
-  userId: string;
-  comment: string;
-  isInternal: boolean;
-  parentCommentId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-  };
-  replies?: RequestComment[];
-}
-
 export interface RequestDataset {
   id: string;
   datasetId: string;
@@ -1044,7 +978,6 @@ export interface RequestDataset {
   dataset: {
     id: string;
     name: string;
-    deactivatedAt: string | null;
   };
 }
 
@@ -1079,6 +1012,7 @@ export interface Request {
   };
   datasets: RequestDataset[];
   documents: RequestDocument[];
+  reviews?: RequestReview[];
   _count: {
     comments: number;
   };
@@ -1145,6 +1079,7 @@ export interface RequestReview {
     | "changes_requested"
     | "delegated";
   reviewNotes: string | null;
+  isInternal: boolean;
   assignedBy: string;
   assignedAt: string;
   reviewedAt: string | null;

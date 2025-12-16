@@ -34,6 +34,11 @@ export function RecentRequests({
   showSystemStats,
   userRole,
 }: RecentRequestsProps) {
+  // Filter requests for reviewers to only show pending/in_review
+  const displayRequests = canApproveRequests
+    ? requests.filter((r) => r.status === "pending" || r.status === "in_review")
+    : requests;
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
@@ -94,7 +99,7 @@ export function RecentRequests({
         </Button>
       </CardHeader>
       <CardContent>
-        {requests.length === 0 ? (
+        {displayRequests.length === 0 ? (
           <div className="text-center py-8">
             {canApproveRequests ? (
               <>
@@ -126,7 +131,7 @@ export function RecentRequests({
           </div>
         ) : (
           <div className="space-y-4">
-            {requests.map((request) => (
+            {displayRequests.map((request) => (
               <div
                 key={request.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"

@@ -96,7 +96,10 @@ export default function DatasetForm({
       hasTransactionType: dataset?.hasTransactionType || false,
       hasLandUse: dataset?.hasLandUse || false,
       hasSizeRange: dataset?.hasSizeRange || false,
-      requiresApproval: dataset?.requiresApproval !== undefined ? dataset.requiresApproval : true,
+      requiresApproval:
+        dataset?.requiresApproval !== undefined
+          ? dataset.requiresApproval
+          : true,
       autoApproveForRoles: dataset?.autoApproveForRoles || [],
       allowsRecurring: dataset?.allowsRecurring || false,
     },
@@ -111,7 +114,7 @@ export default function DatasetForm({
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
-      const data = await api.getDatasetCategories({ includeInactive: false });
+      const data = await api.getDatasetCategories();
       setCategories(data);
     } catch (error) {
       toast.error("Failed to load categories");
@@ -483,14 +486,14 @@ export default function DatasetForm({
                   <FormDescription className="text-sm">
                     {field.value ? (
                       <span className="text-blue-900">
-                        Requests for this dataset will require review and approval by
-                        authorized staff before data is released.
+                        Requests for this dataset will require review and
+                        approval by authorized staff before data is released.
                       </span>
                     ) : (
                       <span className="text-gray-700">
                         Requests for this dataset will be automatically approved
-                        without manual review. Use this for public or non-sensitive
-                        datasets.
+                        without manual review. Use this for public or
+                        non-sensitive datasets.
                       </span>
                     )}
                   </FormDescription>
@@ -509,9 +512,9 @@ export default function DatasetForm({
                       Auto-Approval Enabled
                     </h4>
                     <p className="text-sm text-yellow-800">
-                      Requests for this dataset will be instantly approved without
-                      requiring manual review. Ensure this dataset doesn't contain
-                      sensitive or restricted information.
+                      Requests for this dataset will be instantly approved
+                      without requiring manual review. Ensure this dataset
+                      doesn't contain sensitive or restricted information.
                     </p>
                   </div>
                 </div>
@@ -524,7 +527,9 @@ export default function DatasetForm({
             name="autoApproveForRoles"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Auto-Approve for Specific Roles (Optional)</FormLabel>
+                <FormLabel>
+                  Auto-Approve for Specific Roles (Optional)
+                </FormLabel>
                 <FormDescription className="mb-3">
                   Even if manual approval is required, these user roles will get
                   instant approval
@@ -575,8 +580,8 @@ export default function DatasetForm({
                     Allow Recurring Requests
                   </FormLabel>
                   <FormDescription>
-                    Users can set up automated recurring requests for this dataset
-                    (e.g., weekly, monthly reports)
+                    Users can set up automated recurring requests for this
+                    dataset (e.g., weekly, monthly reports)
                   </FormDescription>
                 </div>
               </FormItem>

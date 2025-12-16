@@ -29,7 +29,6 @@ import {
   Shield,
   AlertTriangle,
   MessageSquare,
-  Send,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
@@ -37,10 +36,18 @@ import {
   api,
   getErrorMessage,
   type Request,
-  type RequestComment,
+  type RequestReview,
 } from "@/lib/api-config";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface RequestDetailsProps {
   request: Request;
@@ -54,15 +61,15 @@ export default function RequestDetails({
   const { user, hasPermission } = useAuth();
   const router = useRouter();
   const [request, setRequest] = useState(initialRequest);
-  const [adminNotes, setAdminNotes] = useState(request.adminNotes || "");
-  const [rejectionReason, setRejectionReason] = useState(
-    request.rejectionReason || "",
-  );
   const [isProcessing, setIsProcessing] = useState(false);
-  const [comments, setComments] = useState<RequestComment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [reviews, setReviews] = useState<RequestReview[]>([]);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const [reviewAction, setReviewAction] = useState<
+    "approved" | "rejected" | "changes_requested" | null
+  >(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
 
   if (!user) return null;
 
@@ -73,26 +80,38 @@ export default function RequestDetails({
 
   const canApprove =
     hasPermission("canApproveRequests") &&
-    (request.status === "pending" || request.status === "in_review");
+    (request.status === "pending" || request.status === "in_review") &&
+    currentReviewId !== null;
 
   const isOwner = user.id === request.userId;
 
-  // Load comments
+  // Load reviews from the request
   useEffect(() => {
-    const loadComments = async () => {
+    const loadReviews = async () => {
       try {
-        setIsLoadingComments(true);
-        const fetchedComments = await api.getRequestComments(request.id);
-        setComments(fetchedComments);
+        setIsLoadingReviews(true);
+        const reviewsData = await api.getRequestReviews(request.id);
+        setReviews(reviewsData);
+
+        // Find if current user has any pending reviews for this request
+        const myPendingReview = reviewsData.find(
+          (review) =>
+            review.reviewerUserId === user.id &&
+            review.reviewStatus === "pending",
+        );
+
+        if (myPendingReview) {
+          setCurrentReviewId(myPendingReview.id);
+        }
       } catch (error) {
-        console.error("Failed to load comments:", error);
+        console.error("Failed to load reviews:", error);
       } finally {
-        setIsLoadingComments(false);
+        setIsLoadingReviews(false);
       }
     };
 
-    loadComments();
-  }, [request.id]);
+    loadReviews();
+  }, [request.id, user.id]);
 
   // Refresh request data
   const refreshRequest = async () => {
@@ -159,13 +178,23 @@ export default function RequestDetails({
   };
 
   const handleApprove = async () => {
+    if (!currentReviewId) {
+      toast.error("No pending review found for this request");
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      await api.updateRequest(request.id, {
-        // Call status update endpoint
+      await api.submitReviewDecision(currentReviewId, {
+        decision: "approved",
       });
       await refreshRequest();
       toast.success("Request approved successfully");
+
+      // Reload reviews to get updated status
+      const reviewsData = await api.getRequestReviews(request.id);
+      setReviews(reviewsData);
+      setCurrentReviewId(null); // Clear current review ID
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -173,58 +202,64 @@ export default function RequestDetails({
     }
   };
 
-  const handleRequestChanges = async () => {
-    if (!adminNotes.trim()) {
-      toast.error("Please provide notes about what changes are needed");
+  const handleRequestChanges = () => {
+    if (!currentReviewId) {
+      toast.error("No pending review found for this request");
+      return;
+    }
+    setReviewAction("changes_requested");
+    setReviewNotes("");
+    setShowReviewDialog(true);
+  };
+
+  const handleReject = () => {
+    if (!currentReviewId) {
+      toast.error("No pending review found for this request");
+      return;
+    }
+    setReviewAction("rejected");
+    setReviewNotes("");
+    setShowReviewDialog(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewNotes.trim() && reviewAction !== "approved") {
+      toast.error("Please provide review notes");
+      return;
+    }
+
+    if (!currentReviewId || !reviewAction) {
+      toast.error("Invalid review state");
       return;
     }
 
     setIsProcessing(true);
     try {
-      await api.requestChanges(request.id, adminNotes);
-      await refreshRequest();
-      toast.success("Changes requested. User has been notified.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectionReason.trim()) {
-      toast.error("Please provide a reason for rejection");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      // TODO: Implement reject endpoint
-      await refreshRequest();
-      toast.success("Request rejected");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-
-    setIsSubmittingComment(true);
-    try {
-      const comment = await api.addComment(request.id, {
-        comment: newComment,
-        isInternal: !isOwner && hasPermission("canApproveRequests"),
+      await api.submitReviewDecision(currentReviewId, {
+        decision: reviewAction,
+        notes: reviewNotes.trim() || undefined,
       });
-      setComments((prev) => [...prev, comment]);
-      setNewComment("");
-      toast.success("Comment added");
+
+      const actionMessages = {
+        approved: "Request approved successfully",
+        rejected: "Request rejected successfully",
+        changes_requested: "Changes requested. User has been notified.",
+      };
+
+      toast.success(actionMessages[reviewAction]);
+      setShowReviewDialog(false);
+      setReviewNotes("");
+      setReviewAction(null);
+
+      // Reload request and reviews
+      await refreshRequest();
+      const reviewsData = await api.getRequestReviews(request.id);
+      setReviews(reviewsData);
+      setCurrentReviewId(null);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
-      setIsSubmittingComment(false);
+      setIsProcessing(false);
     }
   };
 
@@ -247,10 +282,28 @@ export default function RequestDetails({
     }
   };
 
-  // Filter comments based on user role
-  const visibleComments = comments.filter((comment) => {
-    if (hasPermission("canApproveRequests")) return true; // Admins see all
-    if (isOwner) return !comment.isInternal; // Owners don't see internal comments
+  // Filter review notes based on user role and visibility
+  const visibleReviews = reviews.filter((review) => {
+    // Only show reviews that have actual notes (not null, not empty)
+    const hasNotes =
+      review.reviewNotes !== null &&
+      review.reviewNotes !== undefined &&
+      review.reviewNotes.trim().length > 0;
+
+    // Skip reviews without notes
+    if (!hasNotes) {
+      return false;
+    }
+
+    // Admin users see all review notes
+    if (user.role === "admin") return true;
+
+    // Reviewers (users with canApproveRequests permission) see all reviews
+    if (hasPermission("canApproveRequests")) return true;
+
+    // Request owners see only non-internal notes (public notes)
+    if (isOwner && !review.isInternal) return true;
+
     return false;
   });
 
@@ -408,140 +461,94 @@ export default function RequestDetails({
             </Card>
           )}
 
-          {/* Admin Section */}
-          {hasPermission("canApproveRequests") && (
-            <Card className="border-amber-200 bg-amber-50">
-              <CardHeader>
-                <CardTitle className="flex items-center text-amber-800">
-                  <Shield className="h-5 w-5 mr-2" />
-                  Admin Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label
-                    htmlFor="admin-notes"
-                    className="text-sm font-medium text-amber-700"
-                  >
-                    ADMIN NOTES
-                  </Label>
-                  <Textarea
-                    id="admin-notes"
-                    value={adminNotes}
-                    onChange={(e) => setAdminNotes(e.target.value)}
-                    placeholder="Add notes about this request..."
-                    className="mt-1"
-                    rows={3}
-                  />
-                </div>
-
-                {request.status === "pending" && (
-                  <>
-                    <div>
-                      <Label
-                        htmlFor="rejection-reason"
-                        className="text-sm font-medium text-amber-700"
-                      >
-                        REJECTION REASON (Required for rejection)
-                      </Label>
-                      <Textarea
-                        id="rejection-reason"
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        placeholder="Provide a reason for rejection..."
-                        className="mt-1"
-                        rows={2}
-                      />
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Comments Section */}
+          {/* Review Notes Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <MessageSquare className="h-5 w-5 mr-2" />
-                Comments
-                {comments.length > 0 && (
+                Review Notes
+                {visibleReviews.length > 0 && (
                   <Badge variant="secondary" className="ml-2">
-                    {visibleComments.length}
+                    {visibleReviews.length}
                   </Badge>
                 )}
               </CardTitle>
+              <CardDescription>
+                Notes from reviewers about this request
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Comments List */}
+              {/* Review Notes List */}
               <div className="space-y-4 max-h-96 overflow-y-auto">
-                {isLoadingComments ? (
-                  <p className="text-sm text-gray-500">Loading comments...</p>
-                ) : visibleComments.length === 0 ? (
-                  <p className="text-sm text-gray-500">No comments yet</p>
+                {isLoadingReviews ? (
+                  <p className="text-sm text-gray-500">
+                    Loading review notes...
+                  </p>
+                ) : visibleReviews.length === 0 ? (
+                  <p className="text-sm text-gray-500">No review notes yet</p>
                 ) : (
-                  visibleComments.map((comment) => (
-                    <div key={comment.id} className="flex space-x-3">
+                  visibleReviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="flex space-x-3 p-3 bg-gray-50 rounded-lg"
+                    >
                       <Avatar className="h-8 w-8">
                         <AvatarFallback>
-                          {comment.user.name.substring(0, 2).toUpperCase()}
+                          {review.reviewer.name.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">
-                            {comment.user.name}
+                            {review.reviewer.name}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            {comment.user.role}
+                            {review.reviewer.role}
                           </Badge>
-                          {comment.isInternal && (
+                          <Badge
+                            className={
+                              review.reviewStatus === "approved"
+                                ? "bg-green-100 text-green-800 text-xs"
+                                : review.reviewStatus === "rejected"
+                                  ? "bg-red-100 text-red-800 text-xs"
+                                  : review.reviewStatus === "changes_requested"
+                                    ? "bg-orange-100 text-orange-800 text-xs"
+                                    : review.reviewStatus === "pending"
+                                      ? "bg-yellow-100 text-yellow-800 text-xs"
+                                      : review.reviewStatus === "in_progress"
+                                        ? "bg-blue-100 text-blue-800 text-xs"
+                                        : "bg-gray-100 text-gray-800 text-xs"
+                            }
+                          >
+                            {review.reviewStatus.replace("_", " ")}
+                          </Badge>
+                          {review.isInternal && (
                             <Badge className="bg-amber-100 text-amber-800 text-xs">
-                              Internal
+                              Internal Note
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-gray-700 mt-1">
-                          {comment.comment}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {new Date(comment.createdAt).toLocaleString()}
-                        </p>
+                        {review.reviewNotes && (
+                          <p className="text-sm text-gray-700 mt-2">
+                            {review.reviewNotes}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-500">
+                            {review.reviewedAt
+                              ? `Reviewed: ${new Date(review.reviewedAt).toLocaleString()}`
+                              : `Assigned: ${new Date(review.assignedAt).toLocaleString()}`}
+                          </p>
+                          {review.reviewLevel > 1 && (
+                            <Badge variant="secondary" className="text-xs">
+                              Level {review.reviewLevel}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
                 )}
-              </div>
-
-              <Separator />
-
-              {/* Add Comment */}
-              <div className="space-y-2">
-                <Label htmlFor="new-comment">Add Comment</Label>
-                <Textarea
-                  id="new-comment"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Write a comment..."
-                  rows={3}
-                />
-                <Button
-                  onClick={handleAddComment}
-                  disabled={isSubmittingComment || !newComment.trim()}
-                  size="sm"
-                >
-                  {isSubmittingComment ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                      Posting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-3 w-3 mr-2" />
-                      Post Comment
-                    </>
-                  )}
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -776,6 +783,83 @@ export default function RequestDetails({
           </Card>
         </div>
       </div>
+
+      {/* Review Notes Dialog */}
+      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>
+              {reviewAction === "rejected"
+                ? "Reject Request"
+                : "Request Changes"}
+            </DialogTitle>
+            <DialogDescription>
+              {reviewAction === "rejected"
+                ? "Please provide a reason for rejecting this request. The requester will be notified."
+                : "Please provide details about what changes are needed. The requester will be notified."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="review-notes">
+                {reviewAction === "rejected"
+                  ? "Rejection Reason"
+                  : "Change Details"}{" "}
+                *
+              </Label>
+              <Textarea
+                id="review-notes"
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder={
+                  reviewAction === "rejected"
+                    ? "Explain why this request is being rejected..."
+                    : "Describe what changes are needed..."
+                }
+                rows={6}
+                className="resize-none"
+              />
+              <p className="text-xs text-gray-500">
+                This note will be visible to the request owner.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowReviewDialog(false);
+                setReviewNotes("");
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={reviewAction === "rejected" ? "destructive" : "default"}
+              onClick={handleSubmitReview}
+              disabled={isProcessing || !reviewNotes.trim()}
+            >
+              {isProcessing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Processing...
+                </>
+              ) : reviewAction === "rejected" ? (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject Request
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Request Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
