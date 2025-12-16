@@ -301,7 +301,11 @@ export default function RequestDetails({
     // Reviewers (users with canApproveRequests permission) see all reviews
     if (hasPermission("canApproveRequests")) return true;
 
-    // Request owners see only non-internal notes (public notes)
+    // Request owners MUST see changes_requested notes (even if internal)
+    // so they know what to fix
+    if (isOwner && review.reviewStatus === "changes_requested") return true;
+
+    // Request owners see only non-internal notes for other statuses
     if (isOwner && !review.isInternal) return true;
 
     return false;
@@ -668,7 +672,7 @@ export default function RequestDetails({
               )}
 
               {request.status === "approved" &&
-                hasPermission("canExportData") && (
+                (isOwner || hasPermission("canExportData")) && (
                   <Button variant="outline" className="w-full">
                     <Download className="h-4 w-4 mr-2" />
                     Download Data Package

@@ -246,12 +246,26 @@ export interface LoginResponse {
 // ANALYTICS & DASHBOARD TYPES
 
 export interface RequestStats {
-  total: number;
+  total?: number;
+  myRequests?: number;
   pending: number;
   approved: number;
   rejected: number;
   in_review: number;
-  resubmitted?: number;
+  changes_requested?: number;
+  partially_approved?: number;
+  approvalRate?: number;
+  avgProcessingDays?: number;
+  currentMonth?: {
+    total: number;
+    approved: number;
+  };
+  byPriority?: {
+    urgent: number;
+    high: number;
+    normal: number;
+    low: number;
+  };
 }
 
 export interface UserStats {
@@ -261,12 +275,56 @@ export interface UserStats {
   admin: number;
   verified: number;
   unverified: number;
+  active?: number;
+  inactive?: number;
+  currentMonth?: number;
 }
 
 export interface DatasetStats {
   total: number;
   categories: number;
   totalRequests: number;
+  currentMonthRequests?: number;
+  mostRequested?: Array<{
+    datasetId: string;
+    count: number;
+  }>;
+}
+
+export interface ReviewStats {
+  total: number;
+  pending: number;
+  in_progress: number;
+  approved: number;
+  rejected: number;
+  changes_requested: number;
+  activeReviewers: number;
+  byDataset?: Array<{
+    datasetId: string;
+    reviewerCount: number;
+  }>;
+  byProvince?: Array<{
+    provinceId: string;
+    reviewerCount: number;
+  }>;
+  byDistrict?: Array<{
+    districtId: string;
+    reviewerCount: number;
+  }>;
+}
+
+export interface ExportStats {
+  total: number;
+  currentMonth: number;
+  totalDownloads: number;
+  byFormat: {
+    csv: number;
+    xlsx: number;
+    json: number;
+    shapefile: number;
+    pdf: number;
+  };
+  activeExports: number;
 }
 
 export interface RecentRequest {
@@ -294,6 +352,8 @@ export interface DashboardData {
   requests: RequestStats;
   users?: UserStats;
   datasets?: DatasetStats;
+  reviews?: ReviewStats;
+  exports?: ExportStats;
   recentActivity: RecentRequest[];
   requestsByMonth?: MonthlyData[];
 }
