@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useDebouncedCallback } from "use-debounce";
 import {
   Card,
   CardContent,
@@ -83,6 +82,13 @@ interface RequestFormProps {
 interface FileWithCategory {
   file: File;
   category: "verification" | "research" | "authorization" | "other";
+}
+
+interface UploadingFile {
+  name: string;
+  progress: number;
+  status: "uploading" | "success" | "error";
+  error?: string;
 }
 
 const UpiBadge = ({ upi, onRemove }: { upi: string; onRemove: () => void }) => (
@@ -330,9 +336,15 @@ export default function RequestForm({
     DatasetSelection[]
   >([]);
   const [uploadedFiles, setUploadedFiles] = useState<FileWithCategory[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState<RequestDocument[]>(
+    [],
+  );
   const [adminNotes, setAdminNotes] = useState<string | null>(
     initialData?.adminNotes || null,
   );
+  const [datasetCategories, setDatasetCategories] = useState<any[]>([]);
+  const [isLoadingDatasets, setIsLoadingDatasets] = useState(true);
 
   // Conditional rendering logic
   const isDraftCreated = !!requestId || !!initialData?.id;
@@ -347,9 +359,20 @@ export default function RequestForm({
   const requiredDocuments = getRequiredDocuments();
 
   const getAvailableDatasets = () => {
-    const userDatasets = Object.entries(DATASET_CATEGORIES).reduce(
-      (acc, [categoryKey, category]) => {
-        const filteredDatasets = category.datasets.filter((dataset) => {
+    // Use API data if available, otherwise fall back to hardcoded data
+    const sourceData =
+      datasetCategories.length > 0
+        ? datasetCategories
+        : Object.entries(DATASET_CATEGORIES).map(([key, category]) => ({
+            id: key,
+            ...category,
+          }));
+
+    // Filter datasets based on user role
+    const filteredCategories = sourceData
+      .map((category: any) => {
+        const filteredDatasets = category.datasets.filter((dataset: any) => {
+          // For external users, filter out internal/admin-only datasets
           if (user.role === "external") {
             return (
               !dataset.id.includes("internal-") &&
@@ -359,21 +382,101 @@ export default function RequestForm({
           return true;
         });
 
-        if (filteredDatasets.length > 0) {
-          acc[categoryKey] = { ...category, datasets: filteredDatasets };
-        }
-        return acc;
-      },
-      {} as typeof DATASET_CATEGORIES,
-    );
+        return {
+          ...category,
+          datasets: filteredDatasets,
+        };
+      })
+      .filter((category: any) => category.datasets.length > 0);
 
-    return userDatasets;
+    // Convert to object keyed by category id for backward compatibility
+    return filteredCategories.reduce((acc: any, category: any) => {
+      acc[category.id] = category;
+      return acc;
+    }, {});
   };
 
   const availableDatasets = getAvailableDatasets();
 
+  // Load dataset categories from API
+  useEffect(() => {
+    const loadDatasetCategories = async () => {
+      try {
+        setIsLoadingDatasets(true);
+        const categories = await api.getDatasetCategories({
+          includeInactive: false,
+        });
+
+        // Filter out deactivated categories and datasets
+        const activeCategories = categories
+          .filter((cat: any) => !cat.deactivatedAt)
+          .map((cat: any) => ({
+            id: cat.id,
+            name: cat.name,
+            icon: cat.icon,
+            description: cat.description,
+            sortOrder: cat.sortOrder,
+            datasets: cat.datasets
+              .filter((ds: any) => !ds.deactivatedAt)
+              .map((ds: any) => ({
+                id: ds.id,
+                name: ds.name,
+                description: ds.description || "",
+                requiresPeriod: ds.requiresPeriod,
+                requiresUpiList: ds.requiresUpiList,
+                requiresIdList: ds.requiresIdList,
+                requiresUpi: ds.requiresUpi,
+                hasAdminLevel: ds.hasAdminLevel,
+                hasUserLevel: ds.hasUserLevel,
+                hasTransactionType: ds.hasTransactionType,
+                hasLandUse: ds.hasLandUse,
+                hasSizeRange: ds.hasSizeRange,
+                fields: ds.fields,
+                criteria: ds.criteria,
+              })),
+          }))
+          .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+
+        setDatasetCategories(activeCategories);
+      } catch (error) {
+        console.error("Failed to load dataset categories:", error);
+        toast.error("Failed to load datasets. Using offline data.");
+        // Fallback to hardcoded data if API fails
+        setDatasetCategories(
+          Object.entries(DATASET_CATEGORIES).map(([key, category]) => ({
+            id: key,
+            name: category.name,
+            icon: category.icon,
+            description: category.description,
+            datasets: category.datasets,
+          })),
+        );
+      } finally {
+        setIsLoadingDatasets(false);
+      }
+    };
+    loadDatasetCategories();
+  }, []);
+
+  // Load existing documents when editing
+  useEffect(() => {
+    if (requestId && mode === "edit") {
+      const loadDocuments = async () => {
+        try {
+          const docs = await api.getRequestDocuments(requestId);
+          setUploadedDocuments(docs);
+        } catch (error) {
+          console.error("Failed to load documents:", error);
+        }
+      };
+      loadDocuments();
+    }
+  }, [requestId, mode]);
+
   // Auto-save draft on changes (debounced)
-  const debouncedSaveDraft = useDebouncedCallback(async () => {
+  const saveDraftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedSaveDraft = useCallback(async () => {
     if (requestId && status === "draft" && canEdit && isDraftCreated) {
       try {
         setIsSaving(true);
@@ -384,11 +487,26 @@ export default function RequestForm({
         setIsSaving(false);
       }
     }
-  }, 2000);
+  }, [requestId, status, canEdit, isDraftCreated, formData]);
 
   useEffect(() => {
     if (requestId && status === "draft" && canEdit) {
-      debouncedSaveDraft();
+      // Clear existing timeout
+      if (saveDraftTimeoutRef.current) {
+        clearTimeout(saveDraftTimeoutRef.current);
+      }
+
+      // Set new timeout for debounced save
+      saveDraftTimeoutRef.current = setTimeout(() => {
+        debouncedSaveDraft();
+      }, 2000);
+
+      // Cleanup on unmount or dependency change
+      return () => {
+        if (saveDraftTimeoutRef.current) {
+          clearTimeout(saveDraftTimeoutRef.current);
+        }
+      };
     }
   }, [formData, requestId, status, canEdit, debouncedSaveDraft]);
 
@@ -923,24 +1041,81 @@ export default function RequestForm({
   };
 
   const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
+    file: File,
+    category: "verification" | "research" | "authorization" | "other",
   ) => {
     if (!requestId) {
       toast.error("Please save the basic information first");
       return;
     }
 
-    const files = Array.from(event.target.files || []);
+    // Add to uploading files
+    const uploadingFile: UploadingFile = {
+      name: file.name,
+      progress: 0,
+      status: "uploading",
+    };
 
-    for (const file of files) {
-      try {
-        await api.uploadDocumentToRequest(requestId, file, "other");
-      } catch (error) {
-        toast.error(`Failed to upload ${file.name}: ${getErrorMessage(error)}`);
-      }
+    setUploadingFiles((prev) => [...prev, uploadingFile]);
+
+    try {
+      // Simulate progress (in real implementation, use axios onUploadProgress)
+      const progressInterval = setInterval(() => {
+        setUploadingFiles((prev) =>
+          prev.map((f) =>
+            f.name === file.name && f.status === "uploading"
+              ? { ...f, progress: Math.min(f.progress + 10, 90) }
+              : f,
+          ),
+        );
+      }, 200);
+
+      const uploadedDoc = await api.uploadDocumentToRequest(
+        requestId,
+        file,
+        category,
+      );
+
+      clearInterval(progressInterval);
+
+      // Mark as success
+      setUploadingFiles((prev) =>
+        prev.map((f) =>
+          f.name === file.name ? { ...f, progress: 100, status: "success" } : f,
+        ),
+      );
+
+      // Add to uploaded documents
+      setUploadedDocuments((prev) => [...prev, uploadedDoc]);
+
+      // Remove from uploading after a short delay
+      setTimeout(() => {
+        setUploadingFiles((prev) => prev.filter((f) => f.name !== file.name));
+      }, 1000);
+
+      toast.success(`${file.name} uploaded successfully`);
+    } catch (error) {
+      setUploadingFiles((prev) =>
+        prev.map((f) =>
+          f.name === file.name
+            ? { ...f, status: "error", error: getErrorMessage(error) }
+            : f,
+        ),
+      );
+      toast.error(`Failed to upload ${file.name}: ${getErrorMessage(error)}`);
     }
+  };
 
-    toast.success(`${files.length} file(s) uploaded successfully`);
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      await api.deleteDocument(documentId);
+      setUploadedDocuments((prev) =>
+        prev.filter((doc) => doc.id !== documentId),
+      );
+      toast.success("Document deleted successfully");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
 
   const validateForm = () => {
@@ -1305,33 +1480,159 @@ export default function RequestForm({
             </div>
 
             {canEdit && (
+              <div className="space-y-4">
+                <Label>Upload Documents</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    {
+                      value: "verification" as const,
+                      label: "Verification Documents",
+                      description: "ID, Passport, Organization License",
+                    },
+                    {
+                      value: "research" as const,
+                      label: "Research Documents",
+                      description: "Research Proposal, Methodology",
+                    },
+                    {
+                      value: "authorization" as const,
+                      label: "Authorization Documents",
+                      description: "Authorization Letters, Approvals",
+                    },
+                    {
+                      value: "other" as const,
+                      label: "Other Documents",
+                      description: "Additional Supporting Documents",
+                    },
+                  ].map((category) => (
+                    <div
+                      key={category.value}
+                      className="border-2 border-dashed rounded-lg p-4 hover:border-primary/50 transition-colors"
+                    >
+                      <h4 className="font-medium text-sm mb-1">
+                        {category.label}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {category.description}
+                      </p>
+                      <Input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.csv,.xlsx"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            handleFileUpload(file, category.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="hidden"
+                        id={`file-upload-${category.value}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          document
+                            .getElementById(`file-upload-${category.value}`)
+                            ?.click()
+                        }
+                        className="w-full"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose File
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Uploading Files Progress */}
+            {uploadingFiles.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="file-upload">Upload Documents</Label>
-                <div className="mt-1">
-                  <Input
-                    id="file-upload"
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.csv,.xlsx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      document.getElementById("file-upload")?.click()
-                    }
-                    className="w-full h-20 border-dashed border-2 hover:bg-gray-50 transition-colors"
+                <Label>Uploading...</Label>
+                {uploadingFiles.map((file) => (
+                  <div
+                    key={file.name}
+                    className="border rounded-lg p-3 space-y-2"
                   >
-                    <div className="flex flex-col items-center">
-                      <Upload className="h-6 w-6 mb-2" />
-                      <span>Choose Files or Drag & Drop</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <FileText className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm font-medium">{file.name}</span>
+                      </div>
                       <span className="text-xs text-muted-foreground">
-                        PDF, DOC, DOCX, JPG, PNG, CSV, XLSX (Max 10MB each)
+                        {file.progress}%
                       </span>
                     </div>
-                  </Button>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          file.status === "success"
+                            ? "bg-green-600"
+                            : file.status === "error"
+                              ? "bg-red-600"
+                              : "bg-blue-600"
+                        }`}
+                        style={{ width: `${file.progress}%` }}
+                      ></div>
+                    </div>
+                    {file.status === "error" && file.error && (
+                      <p className="text-xs text-red-600">{file.error}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Uploaded Documents */}
+            {uploadedDocuments.length > 0 && (
+              <div className="space-y-2">
+                <Label>Uploaded Documents ({uploadedDocuments.length})</Label>
+                <div className="space-y-2">
+                  {uploadedDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between border rounded-lg p-3 hover:bg-gray-50"
+                    >
+                      <div className="flex items-center space-x-3 flex-1">
+                        <FileText className="h-5 w-5 text-gray-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {doc.originalFilename}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {doc.category}
+                            </Badge>
+                            {doc.isVerified && (
+                              <Badge className="bg-green-100 text-green-800 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Verified
+                              </Badge>
+                            )}
+                            {doc.fileSize && (
+                              <span className="text-xs text-muted-foreground">
+                                {(doc.fileSize / 1024).toFixed(1)} KB
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

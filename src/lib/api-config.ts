@@ -168,6 +168,11 @@ export interface UserPermissions {
   canConfigureDatasets: boolean;
   canViewAnalytics: boolean;
   requiresApproval: boolean;
+  bypassApproval: boolean;
+  bypassApprovalForDatasets: string[];
+  isReviewer: boolean;
+  canAssignReviewers: boolean;
+  canDelegateReviews: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -809,6 +814,188 @@ export const api = {
     );
     return response.data.data!;
   },
+
+  // Reviews
+  getMyReviews: async (params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ReviewsResponse> => {
+    const response = await apiClient.get<ApiResponse<ReviewsResponse>>(
+      "/reviews/my-reviews",
+      { params },
+    );
+    return response.data.data!;
+  },
+
+  getReviewById: async (reviewId: string): Promise<RequestReview> => {
+    const response = await apiClient.get<ApiResponse<RequestReview>>(
+      `/reviews/${reviewId}`,
+    );
+    return response.data.data!;
+  },
+
+  submitReviewDecision: async (
+    reviewId: string,
+    data: {
+      decision: "approved" | "rejected" | "changes_requested";
+      notes?: string;
+    },
+  ): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(
+      `/reviews/${reviewId}/decision`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getRequestReviews: async (requestId: string): Promise<RequestReview[]> => {
+    const response = await apiClient.get<ApiResponse<RequestReview[]>>(
+      `/reviews/request/${requestId}`,
+    );
+    return response.data.data!;
+  },
+
+  reassignReview: async (
+    reviewId: string,
+    data: {
+      newReviewerUserId: string;
+      notes?: string;
+    },
+  ): Promise<RequestReview> => {
+    const response = await apiClient.put<ApiResponse<RequestReview>>(
+      `/reviews/${reviewId}/reassign`,
+      data,
+    );
+    return response.data.data!;
+  },
+
+  getReviewStats: async (): Promise<ReviewStats> => {
+    const response =
+      await apiClient.get<ApiResponse<ReviewStats>>("/reviews/stats");
+    return response.data.data!;
+  },
+
+  // Reviewer Assignment
+  getDatasetReviewers: async (
+    datasetId: string,
+  ): Promise<DatasetReviewerAssignment[]> => {
+    const response = await apiClient.get<
+      ApiResponse<DatasetReviewerAssignment[]>
+    >(`/reviewer-assignments/dataset/${datasetId}`);
+    return response.data.data!;
+  },
+
+  getAllReviewers: async (): Promise<ReviewerUser[]> => {
+    const response = await apiClient.get<ApiResponse<ReviewerUser[]>>(
+      "/reviewer-assignments/reviewers",
+    );
+    return response.data.data!;
+  },
+
+  createReviewerAssignment: async (data: {
+    datasetId: string;
+    reviewerUserId: string;
+    reviewLevel?: number;
+    reviewOrder?: number;
+    provinceId?: string;
+    districtId?: string;
+    sectorId?: string;
+    cellId?: string;
+    villageId?: string;
+    criteriaConfig?: any;
+    isPrimary?: boolean;
+  }): Promise<DatasetReviewerAssignment> => {
+    const response = await apiClient.post<
+      ApiResponse<DatasetReviewerAssignment>
+    >("/reviewer-assignments", data);
+    return response.data.data!;
+  },
+
+  updateReviewerAssignment: async (
+    assignmentId: string,
+    data: {
+      reviewLevel?: number;
+      reviewOrder?: number;
+      provinceId?: string;
+      districtId?: string;
+      sectorId?: string;
+      cellId?: string;
+      villageId?: string;
+      criteriaConfig?: any;
+      isPrimary?: boolean;
+      isActive?: boolean;
+    },
+  ): Promise<DatasetReviewerAssignment> => {
+    const response = await apiClient.put<
+      ApiResponse<DatasetReviewerAssignment>
+    >(`/reviewer-assignments/${assignmentId}`, data);
+    return response.data.data!;
+  },
+
+  deleteReviewerAssignment: async (assignmentId: string): Promise<void> => {
+    await apiClient.delete(`/reviewer-assignments/${assignmentId}`);
+  },
+
+  bulkCreateReviewerAssignments: async (data: {
+    datasetId: string;
+    assignments: Array<{
+      reviewerUserId: string;
+      reviewLevel?: number;
+      reviewOrder?: number;
+      provinceId?: string;
+      districtId?: string;
+      sectorId?: string;
+      cellId?: string;
+      villageId?: string;
+      criteriaConfig?: any;
+      isPrimary?: boolean;
+    }>;
+  }): Promise<DatasetReviewerAssignment[]> => {
+    const response = await apiClient.post<
+      ApiResponse<DatasetReviewerAssignment[]>
+    >("/reviewer-assignments/bulk", data);
+    return response.data.data!;
+  },
+
+  // ============================================================================
+  // ADMINISTRATIVE LEVELS
+  // ============================================================================
+
+  getProvinces: async (): Promise<ProvinceLevel[]> => {
+    const response = await apiClient.get<ApiResponse<ProvinceLevel[]>>(
+      "/administrative-levels/provinces",
+    );
+    return response.data.data!;
+  },
+
+  getDistricts: async (provinceCode: string): Promise<DistrictLevel[]> => {
+    const response = await apiClient.get<ApiResponse<DistrictLevel[]>>(
+      `/administrative-levels/provinces/${provinceCode}/districts`,
+    );
+    return response.data.data!;
+  },
+
+  getSectors: async (districtCode: string): Promise<SectorLevel[]> => {
+    const response = await apiClient.get<ApiResponse<SectorLevel[]>>(
+      `/administrative-levels/districts/${districtCode}/sectors`,
+    );
+    return response.data.data!;
+  },
+
+  getCells: async (sectorCode: string): Promise<CellLevel[]> => {
+    const response = await apiClient.get<ApiResponse<CellLevel[]>>(
+      `/administrative-levels/sectors/${sectorCode}/cells`,
+    );
+    return response.data.data!;
+  },
+
+  getVillages: async (cellCode: string): Promise<VillageLevel[]> => {
+    const response = await apiClient.get<ApiResponse<VillageLevel[]>>(
+      `/administrative-levels/cells/${cellCode}/villages`,
+    );
+    return response.data.data!;
+  },
 };
 
 // ============================================================================
@@ -913,6 +1100,7 @@ export interface RequestsQueryParams {
   status?: string;
   priority?: string;
   search?: string;
+  email?: string;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -936,6 +1124,193 @@ export interface UsersQueryParams {
 export interface UsersResponse {
   users: User[];
   pagination: PaginationMeta;
+}
+
+// ============================================================================
+// REVIEWS TYPES
+// ============================================================================
+
+export interface RequestReview {
+  id: string;
+  requestId: string;
+  requestDatasetId: string;
+  reviewerUserId: string;
+  reviewLevel: number;
+  reviewOrder: number;
+  reviewStatus:
+    | "pending"
+    | "in_progress"
+    | "approved"
+    | "rejected"
+    | "changes_requested"
+    | "delegated";
+  reviewNotes: string | null;
+  assignedBy: string;
+  assignedAt: string;
+  reviewedAt: string | null;
+  emailSentAt: string | null;
+  reminderSentCount: number;
+  lastReminderAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  request?: {
+    id: string;
+    requestNumber: string;
+    title: string;
+    description: string;
+    status: string;
+    createdAt: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      organizationName: string | null;
+    };
+  };
+  requestDataset?: {
+    id: string;
+    datasetId: string;
+    criteria: any;
+    dataset: {
+      id: string;
+      name: string;
+      description: string;
+    };
+  };
+  reviewer?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  assigner?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface ReviewsResponse {
+  reviews: RequestReview[];
+  pagination: PaginationMeta;
+}
+
+export interface ReviewStats {
+  totalPending: number;
+  totalInProgress: number;
+  totalCompleted: number;
+  overdueReviews: number;
+}
+
+export interface DatasetReviewerAssignment {
+  id: string;
+  datasetId: string;
+  reviewerUserId: string;
+  reviewerRole: string | null;
+  reviewLevel: number;
+  reviewOrder: number;
+  provinceId: string | null;
+  districtId: string | null;
+  sectorId: string | null;
+  cellId: string | null;
+  villageId: string | null;
+  criteriaConfig: any;
+  isPrimary: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  reviewer?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  dataset?: {
+    id: string;
+    name: string;
+    description: string;
+  };
+}
+
+export interface ReviewerUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  permissions: {
+    canAssignReviewers: boolean;
+    canDelegateReviews: boolean;
+  };
+}
+
+// ============================================================================
+// ADMINISTRATIVE LEVELS TYPES
+// ============================================================================
+
+export interface ProvinceLevel {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+}
+
+export interface DistrictLevel {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+  districtCode: string;
+  districtName: string;
+}
+
+export interface SectorLevel {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+  districtCode: string;
+  districtName: string;
+  sectorCode: string;
+  sectorName: string;
+}
+
+export interface CellLevel {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+  districtCode: string;
+  districtName: string;
+  sectorCode: string;
+  sectorName: string;
+  cellCode: string;
+  cellName: string;
+}
+
+export interface VillageLevel {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+  districtCode: string;
+  districtName: string;
+  sectorCode: string;
+  sectorName: string;
+  cellCode: string;
+  cellName: string;
+  villageCode: string;
+  villageName: string;
+}
+
+export interface AdministrativeLevel {
+  id: string;
+  level: number;
+  code: string;
+  name: string;
+  nameKinyarwanda: string | null;
+  parentId: string | null;
+  provinceCode: string | null;
+  districtCode: string | null;
+  sectorCode: string | null;
+  cellCode: string | null;
+  villageCode: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================================================

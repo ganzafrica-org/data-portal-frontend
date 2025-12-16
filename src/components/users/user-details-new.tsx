@@ -30,8 +30,73 @@ import {
   getErrorMessage,
   type User,
   type Request,
+  type Dataset,
 } from "@/lib/api-config";
 import { toast } from "sonner";
+
+const PERMISSIONS_CONFIG = [
+  {
+    key: "canViewAllRequests",
+    label: "View All Requests",
+    description: "Can see requests from all users",
+  },
+  {
+    key: "canApproveRequests",
+    label: "Approve Requests",
+    description: "Can approve or reject data requests",
+  },
+  {
+    key: "canManageUsers",
+    label: "Manage Users",
+    description: "Can create, edit, and delete users",
+  },
+  {
+    key: "canExportData",
+    label: "Export Data",
+    description: "Can download and export datasets",
+  },
+  {
+    key: "canViewAuditTrail",
+    label: "View Audit Trail",
+    description: "Can access system audit logs",
+  },
+  {
+    key: "canConfigureDatasets",
+    label: "Configure Datasets",
+    description: "Can create and manage datasets",
+  },
+  {
+    key: "canViewAnalytics",
+    label: "View Analytics",
+    description: "Can access analytics dashboard",
+  },
+  {
+    key: "requiresApproval",
+    label: "Requires Approval",
+    description: "Requests need admin approval",
+  },
+  {
+    key: "isReviewer",
+    label: "Is Reviewer",
+    description: "Can review and approve dataset requests",
+  },
+  {
+    key: "canAssignReviewers",
+    label: "Assign Reviewers",
+    description: "Can assign reviewers to datasets",
+  },
+  {
+    key: "canDelegateReviews",
+    label: "Delegate Reviews",
+    description: "Can delegate reviews to other reviewers",
+  },
+  {
+    key: "bypassApproval",
+    label: "Bypass Approval",
+    description: "Can submit requests without approval workflow",
+    hasDatasetSelector: true,
+  },
+] as const;
 
 interface UserDetailsProps {
   user: User;
@@ -42,6 +107,7 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
   const { user: currentUser } = useAuth();
   const [userRequests, setUserRequests] = useState<Request[]>([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
 
   const [formData, setFormData] = useState({
     name: user.name,
@@ -54,6 +120,19 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch datasets on mount
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        const data = await api.getDatasets();
+        setDatasets(data);
+      } catch (error) {
+        console.error("Failed to fetch datasets:", error);
+      }
+    };
+    fetchDatasets();
+  }, []);
 
   // Fetch user requests
   useEffect(() => {
@@ -112,6 +191,23 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
         [permission]: checked,
       },
     }));
+  };
+
+  const handleDatasetToggle = (datasetId: string) => {
+    setFormData((prev) => {
+      const currentDatasets = prev.permissions.bypassApprovalForDatasets || [];
+      const newDatasets = currentDatasets.includes(datasetId)
+        ? currentDatasets.filter((id) => id !== datasetId)
+        : [...currentDatasets, datasetId];
+
+      return {
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          bypassApprovalForDatasets: newDatasets,
+        },
+      };
+    });
   };
 
   const handleSave = async () => {
@@ -381,206 +477,80 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canViewAllRequests"
-                    checked={formData.permissions.canViewAllRequests}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canViewAllRequests",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canViewAllRequests"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      View All Requests
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can see requests from all users
-                    </p>
-                  </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {PERMISSIONS_CONFIG.map((permission) => {
+                    const key = permission.key;
+
+                    return (
+                      <div key={key} className="flex items-start space-x-2">
+                        <Checkbox
+                          id={key}
+                          checked={Boolean(formData.permissions[key])}
+                          onCheckedChange={(checked) =>
+                            handlePermissionChange(key, checked as boolean)
+                          }
+                          disabled={!isEditing}
+                        />
+                        <div>
+                          <Label htmlFor={key} className="text-sm font-medium">
+                            {permission.label}
+                          </Label>
+                          <p className="text-xs text-gray-500">
+                            {permission.description}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canApproveRequests"
-                    checked={formData.permissions.canApproveRequests}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canApproveRequests",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canApproveRequests"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Approve Requests
+                {/* Dataset Selector for Bypass Approval */}
+                {formData.permissions.bypassApproval && (
+                  <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                    <Label className="text-sm font-medium mb-3 block">
+                      Datasets for Bypass Approval
                     </Label>
-                    <p className="text-xs text-gray-500">
-                      Can approve or reject data requests
+                    <p className="text-xs text-gray-500 mb-3">
+                      Select which datasets this user can request without
+                      approval workflow
                     </p>
-                  </div>
-                </div>
 
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canManageUsers"
-                    checked={formData.permissions.canManageUsers}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canManageUsers",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canManageUsers"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Manage Users
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can create, edit, and manage users
-                    </p>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {datasets.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">
+                          No datasets available
+                        </p>
+                      ) : (
+                        datasets.map((dataset) => (
+                          <div
+                            key={dataset.id}
+                            className="flex items-center space-x-2"
+                          >
+                            <Checkbox
+                              id={`dataset-${dataset.id}`}
+                              checked={
+                                formData.permissions.bypassApprovalForDatasets?.includes(
+                                  dataset.id,
+                                ) || false
+                              }
+                              onCheckedChange={() =>
+                                handleDatasetToggle(dataset.id)
+                              }
+                              disabled={!isEditing}
+                            />
+                            <Label
+                              htmlFor={`dataset-${dataset.id}`}
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              {dataset.name}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canExportData"
-                    checked={formData.permissions.canExportData}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canExportData",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canExportData"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Export Data
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can download and export datasets
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canViewAuditTrail"
-                    checked={formData.permissions.canViewAuditTrail}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canViewAuditTrail",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canViewAuditTrail"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      View Audit Trail
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can access system audit logs
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canConfigureDatasets"
-                    checked={formData.permissions.canConfigureDatasets}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canConfigureDatasets",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canConfigureDatasets"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Configure Datasets
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can configure dataset settings
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="canViewAnalytics"
-                    checked={formData.permissions.canViewAnalytics}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "canViewAnalytics",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="canViewAnalytics"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      View Analytics
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Can access analytics dashboard
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="requiresApproval"
-                    checked={formData.permissions.requiresApproval}
-                    onCheckedChange={(checked) =>
-                      handlePermissionChange(
-                        "requiresApproval",
-                        checked as boolean,
-                      )
-                    }
-                    disabled={!isEditing}
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="requiresApproval"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Requires Approval
-                    </Label>
-                    <p className="text-xs text-gray-500">
-                      Requests need admin approval
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -636,7 +606,9 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
                   ))}
                   {userRequests.length > 5 && (
                     <Button variant="outline" className="w-full" asChild>
-                      <Link href={`/requests?search=${user.email}`}>
+                      <Link
+                        href={`/requests?email=${encodeURIComponent(user.email)}`}
+                      >
                         View all {userRequests.length} requests
                       </Link>
                     </Button>
@@ -745,7 +717,9 @@ export default function UserDetailsNew({ user, onUpdate }: UserDetailsProps) {
             </CardHeader>
             <CardContent className="space-y-3">
               <Button variant="outline" className="w-full" asChild>
-                <Link href={`/requests?search=${user.email}`}>
+                <Link
+                  href={`/requests?email=${encodeURIComponent(user.email)}`}
+                >
                   <FileText className="h-4 w-4 mr-2" />
                   View All Requests
                 </Link>

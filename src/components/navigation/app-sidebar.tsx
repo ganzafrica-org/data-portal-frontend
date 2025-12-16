@@ -8,6 +8,7 @@ import {
   Users,
   Database,
   BarChart3,
+  ClipboardCheck,
   X,
 } from "lucide-react";
 
@@ -72,6 +73,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Requests", url: "/requests", icon: FileText },
     ];
+
+    // Reviews - only for users with isReviewer permission
+    if (user.permissions?.isReviewer) {
+      baseItems.push({
+        title: "My Reviews",
+        url: "/reviews",
+        icon: ClipboardCheck,
+      });
+    }
 
     // Users - only for admins or users with canManageUsers permission
     if (canManageUsers()) {
