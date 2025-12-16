@@ -1,20 +1,20 @@
-"use client"
+"use client";
 
-import { Suspense } from "react"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
-import { StatsCards, StatsCardsSkeleton } from "./stats-cards"
-import { RecentRequests, RecentRequestsSkeleton } from "./recent-requests"
-import { api } from "@/lib/api-config"
-import { use } from "react"
+import { Suspense, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context";
+import { StatsCards, StatsCardsSkeleton } from "./stats-cards";
+import { RecentRequests, RecentRequestsSkeleton } from "./recent-requests";
+import { api } from "@/lib/api-config";
+import { use } from "react";
 
 function StatsCardsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
-  const data = use(dataPromise)
-  const { user, canManageUsers, canApproveRequests } = useAuth()
+  const data = use(dataPromise);
+  const { user, canManageUsers, canApproveRequests } = useAuth();
 
-  if (!user) return null
+  if (!user) return null;
 
   return (
     <StatsCards
@@ -25,16 +25,17 @@ function StatsCardsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
       canManageUsers={canManageUsers()}
       canApproveRequests={canApproveRequests()}
     />
-  )
+  );
 }
 
 function RecentRequestsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
-  const data = use(dataPromise)
-  const { user, canApproveRequests, hasPermission } = useAuth()
+  const data = use(dataPromise);
+  const { user, canApproveRequests, hasPermission } = useAuth();
 
-  if (!user) return null
+  if (!user) return null;
 
-  const showSystemStats = user.role === 'admin' || hasPermission('canViewAllRequests')
+  const showSystemStats =
+    user.role === "admin" || hasPermission("canViewAllRequests");
 
   return (
     <RecentRequests
@@ -43,45 +44,45 @@ function RecentRequestsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
       showSystemStats={showSystemStats}
       userRole={user.role}
     />
-  )
+  );
 }
 
 export default function DashboardContent() {
-  const { user } = useAuth()
+  const { user } = useAuth();
 
-  if (!user) return null
+  if (!user) return null;
 
-  // Create the promise once
-  const dashboardDataPromise = api.getDashboardData()
+  // Create the promise once using useMemo to prevent re-creating on every render
+  const dashboardDataPromise = useMemo(() => api.getDashboardData(), []);
 
   const getWelcomeMessage = () => {
     switch (user.role) {
-      case 'admin':
+      case "admin":
         return {
-          title: 'Admin Dashboard',
-          subtitle: 'Manage data requests, users, and system oversight.'
-        }
-      case 'internal':
+          title: "Admin Dashboard",
+          subtitle: "Manage data requests, users, and system oversight.",
+        };
+      case "internal":
         return {
           title: `Welcome back, ${user.name}!`,
           subtitle: user.permissions.canApproveRequests
-            ? 'Review and manage data requests.'
-            : 'Access internal data and submit requests.'
-        }
-      case 'external':
+            ? "Review and manage data requests."
+            : "Access internal data and submit requests.",
+        };
+      case "external":
         return {
           title: `Welcome back, ${user.name}!`,
-          subtitle: 'Manage your data requests and track their progress here.'
-        }
+          subtitle: "Manage your data requests and track their progress here.",
+        };
       default:
         return {
-          title: 'Dashboard',
-          subtitle: 'Welcome to the NLA Data Portal.'
-        }
+          title: "Dashboard",
+          subtitle: "Welcome to the NLA Data Portal.",
+        };
     }
-  }
+  };
 
-  const welcomeMessage = getWelcomeMessage()
+  const welcomeMessage = getWelcomeMessage();
 
   return (
     <div className="space-y-6">
@@ -90,10 +91,8 @@ export default function DashboardContent() {
         <h1 className="text-2xl font-bold text-white mb-2">
           {welcomeMessage.title}
         </h1>
-        <p className="text-yellow mb-4">
-          {welcomeMessage.subtitle}
-        </p>
-        {(user.role === 'internal' || user.role === 'external') && (
+        <p className="text-yellow mb-4">{welcomeMessage.subtitle}</p>
+        {(user.role === "internal" || user.role === "external") && (
           <Button asChild>
             <Link href="/requests/new">
               <Plus className="h-4 w-4 mr-2" />
@@ -120,5 +119,5 @@ export default function DashboardContent() {
         <RecentRequestsWrapper dataPromise={dashboardDataPromise} />
       </Suspense>
     </div>
-  )
+  );
 }

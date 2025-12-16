@@ -66,10 +66,10 @@ export default function RequestDetails({
 
   if (!user) return null;
 
+  // Only the request owner can edit their request (not internal/admin users)
   const canEdit =
-    (user.id === request.userId &&
-      (request.status === "draft" || request.status === "changes_requested")) ||
-    hasPermission("canApproveRequests");
+    user.id === request.userId &&
+    (request.status === "draft" || request.status === "changes_requested");
 
   const canApprove =
     hasPermission("canApproveRequests") &&

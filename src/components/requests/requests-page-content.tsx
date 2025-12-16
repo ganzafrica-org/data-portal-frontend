@@ -74,12 +74,14 @@ export default function RequestsPageContent() {
     };
 
     const search = searchParams.get("search");
+    const email = searchParams.get("email");
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
     if (search) params.search = search;
+    if (email) params.email = email;
     // Only add status/priority to API call if not "all"
     if (status && status !== "all") params.status = status;
     if (priority && priority !== "all") params.priority = priority;

@@ -32,9 +32,11 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getErrorMessage } from "@/lib/api-config";
+import DatasetReviewersDialog from "./dataset-reviewers-dialog";
 
 export default function DatasetsTab() {
   const router = useRouter();
@@ -48,6 +50,15 @@ export default function DatasetsTab() {
     limit: 12,
     total: 0,
     totalPages: 0,
+  });
+  const [reviewersDialog, setReviewersDialog] = useState<{
+    open: boolean;
+    datasetId: string;
+    datasetName: string;
+  }>({
+    open: false,
+    datasetId: "",
+    datasetName: "",
   });
 
   const searchQuery = searchParams.get("search") || "";
@@ -194,6 +205,14 @@ export default function DatasetsTab() {
     }
   };
 
+  const handleManageReviewers = (dataset: any) => {
+    setReviewersDialog({
+      open: true,
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+    });
+  };
+
   const getCategoryInfo = (categoryId: string) => {
     const category = categories.find((c) => c.id === categoryId);
     return category || { name: "Uncategorized", icon: "📁" };
@@ -305,48 +324,45 @@ export default function DatasetsTab() {
               return (
                 <Card
                   key={dataset.id}
-                  className={`relative overflow-hidden transition-all hover:shadow-md ${
+                  className={`relative overflow-hidden transition-all hover:shadow-md flex flex-col h-[300px] ${
                     !isActive ? "opacity-75" : ""
                   }`}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start space-x-2 flex-1 min-w-0">
-                        <div className="text-2xl flex-shrink-0">
-                          {category.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base sm:text-lg mb-2 line-clamp-2">
-                            {dataset.name}
-                          </CardTitle>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {isActive ? (
-                              <Badge className="bg-green-100 text-green-800 border-green-200">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Inactive
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs">
-                              {category.name}
+                  <CardHeader className="pb-2 shrink-0">
+                    <div className="flex items-start gap-2">
+                      <div className="text-2xl flex-shrink-0">
+                        {category.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-sm font-semibold mb-1.5 line-clamp-2 min-h-[40px]">
+                          {dataset.name}
+                        </CardTitle>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isActive ? (
+                            <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Active
                             </Badge>
-                          </div>
+                          ) : (
+                            <Badge className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Inactive
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {category.name}
+                          </Badge>
                         </div>
                       </div>
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-3">
-                    <CardDescription className="line-clamp-2 text-sm min-h-[2.5rem]">
+                  <CardContent className="flex-1 flex flex-col overflow-hidden pb-2 pt-0">
+                    <CardDescription className="line-clamp-2 text-xs min-h-[24px] mb-2">
                       {dataset.description || "No description provided"}
                     </CardDescription>
 
-                    {/* Requirements Tags */}
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1 min-h-[28px] content-start">
                       {dataset.hasAdminLevel && (
                         <Badge variant="outline" className="text-xs">
                           Admin Level
@@ -394,47 +410,58 @@ export default function DatasetsTab() {
                       )}
                     </div>
 
-                    {/* Actions and Date */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
-                      {isActive && dataset.createdAt && (
-                        <div className="text-xs text-gray-500">
-                          Activated:{" "}
-                          {new Date(dataset.createdAt).toLocaleDateString()}
+                    <div className="flex-1" />
+
+                    <div className="space-y-2 mt-auto pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleManageReviewers(dataset)}
+                        className="w-full h-8 text-xs"
+                      >
+                        <Users className="h-3.5 w-3.5 mr-1.5" />
+                        Manage Reviewers
+                      </Button>
+
+                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t">
+                        <div className="text-xs text-gray-500 truncate">
+                          {isActive && dataset.createdAt
+                            ? new Date(dataset.createdAt).toLocaleDateString()
+                            : "—"}
                         </div>
-                      )}
-                      {!isActive && (
-                        <div className="text-xs text-gray-500"></div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleStatus(dataset)}
-                          title={isActive ? "Deactivate" : "Activate"}
-                        >
-                          {isActive ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditDataset(dataset)}
-                          title="Edit"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteDataset(dataset.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleStatus(dataset)}
+                            title={isActive ? "Deactivate" : "Activate"}
+                            className="h-7 w-7 p-0"
+                          >
+                            {isActive ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditDataset(dataset)}
+                            title="Edit"
+                            className="h-7 w-7 p-0"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteDataset(dataset.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 w-7 p-0"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -492,6 +519,17 @@ export default function DatasetsTab() {
           )}
         </>
       )}
+
+      {/* Reviewer Assignment Dialog */}
+      <DatasetReviewersDialog
+        open={reviewersDialog.open}
+        onOpenChange={(open) =>
+          setReviewersDialog({ ...reviewersDialog, open })
+        }
+        datasetId={reviewersDialog.datasetId}
+        datasetName={reviewersDialog.datasetName}
+        onSuccess={fetchData}
+      />
     </>
   );
 }
