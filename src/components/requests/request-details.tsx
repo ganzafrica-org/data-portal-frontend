@@ -29,6 +29,10 @@ import {
   Shield,
   AlertTriangle,
   MessageSquare,
+  ExternalLink,
+  Eye,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
@@ -70,6 +74,9 @@ export default function RequestDetails({
   const [reviewNotes, setReviewNotes] = useState("");
   const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(
+    new Set(),
+  );
 
   if (!user) return null;
 
@@ -282,6 +289,125 @@ export default function RequestDetails({
     }
   };
 
+  const handleViewDocument = async (documentId: string, filename: string) => {
+    try {
+      const blob = await api.downloadDocument(documentId);
+      const url = window.URL.createObjectURL(blob);
+
+      // Open in new tab
+      const newWindow = window.open(url, "_blank");
+
+      if (!newWindow) {
+        toast.error("Please allow pop-ups to view documents");
+        return;
+      }
+
+      // Clean up the URL after a delay to ensure the browser loads it
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const toggleDatasetExpansion = (datasetId: string) => {
+    setExpandedDatasets((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(datasetId)) {
+        newSet.delete(datasetId);
+      } else {
+        newSet.add(datasetId);
+      }
+      return newSet;
+    });
+  };
+
+  const formatCriteriaValue = (key: string, value: any): string => {
+    if (value === null || value === undefined) return "N/A";
+
+    // Handle date fields
+    if (key === "dateRangeFrom" || key === "dateRangeTo") {
+      try {
+        return new Date(value).toLocaleDateString();
+      } catch {
+        return String(value);
+      }
+    }
+
+    // Handle arrays
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "None selected";
+
+      // For UPI/ID lists, show count if too many
+      if ((key === "upiList" || key === "idList") && value.length > 5) {
+        return `${value.length} items provided`;
+      }
+
+      return value.join(", ");
+    }
+
+    // Handle administrative level object
+    if (key === "administrativeLevel" && typeof value === "object") {
+      const parts: string[] = [];
+      if (value.provinces?.length)
+        parts.push(`${value.provinces.length} Province(s)`);
+      if (value.districts?.length)
+        parts.push(`${value.districts.length} District(s)`);
+      if (value.sectors?.length)
+        parts.push(`${value.sectors.length} Sector(s)`);
+      if (value.cells?.length) parts.push(`${value.cells.length} Cell(s)`);
+      if (value.villages?.length)
+        parts.push(`${value.villages.length} Village(s)`);
+      return parts.length > 0 ? parts.join(", ") : "Not specified";
+    }
+
+    // Handle other objects
+    if (typeof value === "object") {
+      return JSON.stringify(value, null, 2);
+    }
+
+    // Handle booleans
+    if (typeof value === "boolean") {
+      return value ? "Yes" : "No";
+    }
+
+    // Handle numbers with units
+    if (key === "sizeRangeMin" || key === "sizeRangeMax") {
+      return `${value} hectares`;
+    }
+
+    return String(value);
+  };
+
+  const formatCriteriaLabel = (key: string): string => {
+    // Custom labels for specific fields
+    const labelMap: Record<string, string> = {
+      dateRangeFrom: "Date Range From",
+      dateRangeTo: "Date Range To",
+      administrativeLevel: "Geographic Area",
+      transactionTypes: "Transaction Types",
+      landUseTypes: "Land Use Types",
+      sizeRangeMin: "Minimum Size",
+      sizeRangeMax: "Maximum Size",
+      upiList: "UPI List",
+      idList: "National ID List",
+      userId: "User ID",
+      additionalCriteria: "Additional Criteria",
+    };
+
+    if (labelMap[key]) {
+      return labelMap[key];
+    }
+
+    // Fallback: Convert camelCase or snake_case to Title Case
+    return key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+  };
+
   // Filter review notes based on user role and visibility
   const visibleReviews = reviews.filter((review) => {
     // Only show reviews that have actual notes (not null, not empty)
@@ -374,24 +500,153 @@ export default function RequestDetails({
                 <Label className="text-sm font-medium text-gray-500">
                   REQUESTED DATASETS
                 </Label>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="space-y-3 mt-2">
                   {request.datasets.length === 0 ? (
                     <p className="text-sm text-gray-500">
                       No datasets selected yet
                     </p>
                   ) : (
-                    request.datasets.map((ds) => (
-                      <Badge
-                        key={ds.id}
-                        variant="outline"
-                        className="bg-blue-50 text-blue-700"
-                      >
-                        {ds.dataset.name}
-                        {ds.datasetStatus !== "pending" && (
-                          <span className="ml-1">({ds.datasetStatus})</span>
-                        )}
-                      </Badge>
-                    ))
+                    request.datasets.map((ds) => {
+                      const isExpanded = expandedDatasets.has(ds.id);
+
+                      // Extract criteria fields directly from the dataset object
+                      const criteriaFields: Record<string, any> = {};
+                      const criteriaKeys = [
+                        "dateRangeFrom",
+                        "dateRangeTo",
+                        "administrativeLevel",
+                        "transactionTypes",
+                        "landUseTypes",
+                        "sizeRangeMin",
+                        "sizeRangeMax",
+                        "upiList",
+                        "idList",
+                        "userId",
+                        "additionalCriteria",
+                      ];
+
+                      criteriaKeys.forEach((key) => {
+                        if (
+                          ds[key as keyof typeof ds] !== undefined &&
+                          ds[key as keyof typeof ds] !== null
+                        ) {
+                          criteriaFields[key] = ds[key as keyof typeof ds];
+                        }
+                      });
+
+                      const hasCriteria =
+                        Object.keys(criteriaFields).length > 0;
+
+                      return (
+                        <div
+                          key={ds.id}
+                          className="border rounded-lg overflow-hidden"
+                        >
+                          {/* Dataset Header */}
+                          <div
+                            className={`p-3 bg-blue-50 flex items-center justify-between ${
+                              hasCriteria
+                                ? "cursor-pointer hover:bg-blue-100"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              hasCriteria && toggleDatasetExpansion(ds.id)
+                            }
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              <FileText className="h-4 w-4 text-blue-600" />
+                              <span className="font-medium text-blue-900">
+                                {ds.dataset.name}
+                              </span>
+                              {ds.datasetStatus !== "pending" && (
+                                <Badge
+                                  className={
+                                    ds.datasetStatus === "approved"
+                                      ? "bg-green-100 text-green-800"
+                                      : ds.datasetStatus === "rejected"
+                                        ? "bg-red-100 text-red-800"
+                                        : "bg-gray-100 text-gray-800"
+                                  }
+                                >
+                                  {ds.datasetStatus}
+                                </Badge>
+                              )}
+                            </div>
+                            {hasCriteria && (
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:text-blue-800"
+                                aria-label={
+                                  isExpanded
+                                    ? "Collapse criteria"
+                                    : "Expand criteria"
+                                }
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-5 w-5" />
+                                ) : (
+                                  <ChevronDown className="h-5 w-5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Dataset Criteria (Expandable) */}
+                          {hasCriteria && isExpanded && (
+                            <div className="p-3 bg-white border-t">
+                              <div className="text-sm font-medium text-gray-700 mb-2">
+                                Selection Criteria:
+                              </div>
+                              <div className="grid grid-cols-1 gap-2">
+                                {Object.entries(criteriaFields)
+                                  .filter(([key, value]) => {
+                                    // Filter out null/undefined values
+                                    if (value === null || value === undefined)
+                                      return false;
+                                    // Filter out empty arrays
+                                    if (
+                                      Array.isArray(value) &&
+                                      value.length === 0
+                                    )
+                                      return false;
+                                    return true;
+                                  })
+                                  .map(([key, value]) => (
+                                    <div
+                                      key={key}
+                                      className="flex flex-col sm:flex-row sm:items-start gap-1 text-sm"
+                                    >
+                                      <span className="font-medium text-gray-600 min-w-[140px]">
+                                        {formatCriteriaLabel(key)}:
+                                      </span>
+                                      <span className="text-gray-900 break-words">
+                                        {formatCriteriaValue(key, value)}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                              {Object.entries(criteriaFields).filter(
+                                ([key, value]) => {
+                                  if (value === null || value === undefined)
+                                    return false;
+                                  if (
+                                    Array.isArray(value) &&
+                                    value.length === 0
+                                  )
+                                    return false;
+                                  return true;
+                                },
+                              ).length === 0 && (
+                                <p className="text-sm text-gray-500 italic">
+                                  No specific criteria selected (all data
+                                  requested)
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -438,8 +693,13 @@ export default function RequestDetails({
                             {doc.originalFilename}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {doc.category}
+                            Category: {doc.category}
                           </p>
+                          {doc.fileSize && (
+                            <p className="text-xs text-gray-400">
+                              {(doc.fileSize / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -449,11 +709,23 @@ export default function RequestDetails({
                           </Badge>
                         )}
                         <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            handleViewDocument(doc.id, doc.originalFilename)
+                          }
+                          title="View document in browser"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           onClick={() =>
                             handleDownloadDocument(doc.id, doc.originalFilename)
                           }
+                          title="Download document"
                         >
                           <Download className="h-4 w-4" />
                         </Button>

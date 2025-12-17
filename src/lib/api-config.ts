@@ -1034,7 +1034,25 @@ export interface RequestDataset {
   id: string;
   datasetId: string;
   datasetStatus: string;
-  criteria: any;
+  criteria: any; // Deprecated - criteria fields are now at the top level
+  // Criteria fields (flattened at root level in API response)
+  dateRangeFrom?: string;
+  dateRangeTo?: string;
+  administrativeLevel?: {
+    provinces?: string[];
+    districts?: string[];
+    sectors?: string[];
+    cells?: string[];
+    villages?: string[];
+  };
+  transactionTypes?: string[];
+  landUseTypes?: string[];
+  sizeRangeMin?: number | null;
+  sizeRangeMax?: number | null;
+  upiList?: string[];
+  idList?: string[];
+  userId?: string;
+  additionalCriteria?: any;
   dataset: {
     id: string;
     name: string;
