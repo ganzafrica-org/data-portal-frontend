@@ -24,10 +24,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  XCircle,
   Search,
   Filter,
   ChevronLeft,
@@ -63,7 +59,6 @@ export default function DatasetsTab() {
 
   const searchQuery = searchParams.get("search") || "";
   const filterCategory = searchParams.get("category") || "all";
-  const filterStatus = searchParams.get("status") || "all";
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "12");
 
@@ -80,10 +75,6 @@ export default function DatasetsTab() {
       params.set("limit", "12");
       hasChanges = true;
     }
-    if (!params.has("status")) {
-      params.set("status", "all");
-      hasChanges = true;
-    }
     if (!params.has("category")) {
       params.set("category", "all");
       hasChanges = true;
@@ -96,7 +87,7 @@ export default function DatasetsTab() {
 
   useEffect(() => {
     fetchData();
-  }, [searchQuery, filterCategory, filterStatus, page, limit]);
+  }, [searchQuery, filterCategory, page, limit]);
 
   useEffect(() => {
     fetchCategories();
@@ -104,7 +95,7 @@ export default function DatasetsTab() {
 
   const fetchCategories = async () => {
     try {
-      const data = await api.getDatasetCategories({ includeInactive: true });
+      const data = await api.getDatasetCategories();
       setCategories(data);
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -117,7 +108,6 @@ export default function DatasetsTab() {
       const params: any = {
         page,
         limit,
-        includeInactive: true,
       };
 
       if (searchQuery) params.search = searchQuery;
@@ -126,15 +116,6 @@ export default function DatasetsTab() {
       const data = await api.getDatasets(params);
 
       let filteredDatasets = data.datasets || data;
-
-      // Client-side status filter
-      if (filterStatus === "active") {
-        filteredDatasets = filteredDatasets.filter(
-          (d: any) => !d.deactivatedAt,
-        );
-      } else if (filterStatus === "inactive") {
-        filteredDatasets = filteredDatasets.filter((d: any) => d.deactivatedAt);
-      }
 
       setDatasets(filteredDatasets);
       setPagination(
@@ -173,19 +154,6 @@ export default function DatasetsTab() {
 
   const handleEditDataset = (dataset: any) => {
     router.push(`/configuration/datasets/new?id=${dataset.id}&mode=edit`);
-  };
-
-  const handleToggleStatus = async (dataset: any) => {
-    try {
-      const newStatus = dataset.deactivatedAt ? null : new Date().toISOString();
-      await api.updateDataset(dataset.id, { deactivatedAt: newStatus });
-      toast.success(
-        `Dataset ${newStatus ? "deactivated" : "activated"} successfully`,
-      );
-      fetchData();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
   };
 
   const handleDeleteDataset = async (datasetId: string) => {
@@ -276,19 +244,6 @@ export default function DatasetsTab() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select
-                value={filterStatus}
-                onValueChange={(v) => updateURLParams("status", v)}
-              >
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardContent>
@@ -319,14 +274,11 @@ export default function DatasetsTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {datasets.map((dataset) => {
               const category = getCategoryInfo(dataset.categoryId);
-              const isActive = !dataset.deactivatedAt;
 
               return (
                 <Card
                   key={dataset.id}
-                  className={`relative overflow-hidden transition-all hover:shadow-md flex flex-col h-[300px] ${
-                    !isActive ? "opacity-75" : ""
-                  }`}
+                  className="relative overflow-hidden transition-all hover:shadow-md flex flex-col h-[300px]"
                 >
                   <CardHeader className="pb-2 shrink-0">
                     <div className="flex items-start gap-2">
@@ -338,17 +290,6 @@ export default function DatasetsTab() {
                           {dataset.name}
                         </CardTitle>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {isActive ? (
-                            <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Inactive
-                            </Badge>
-                          )}
                           <Badge variant="outline" className="text-xs">
                             {category.name}
                           </Badge>
@@ -425,24 +366,11 @@ export default function DatasetsTab() {
 
                       <div className="flex items-center justify-between gap-2 pt-1.5 border-t">
                         <div className="text-xs text-gray-500 truncate">
-                          {isActive && dataset.createdAt
+                          {dataset.createdAt
                             ? new Date(dataset.createdAt).toLocaleDateString()
                             : "—"}
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleStatus(dataset)}
-                            title={isActive ? "Deactivate" : "Activate"}
-                            className="h-7 w-7 p-0"
-                          >
-                            {isActive ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

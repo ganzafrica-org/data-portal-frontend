@@ -6,15 +6,33 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { StatsCards, StatsCardsSkeleton } from "./stats-cards";
+import { StatsFolderView, StatsFolderViewSkeleton } from "./stats-folder-view";
 import { RecentRequests, RecentRequestsSkeleton } from "./recent-requests";
 import { api } from "@/lib/api-config";
 import { use } from "react";
 
 function StatsCardsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
   const data = use(dataPromise);
-  const { user, canManageUsers, canApproveRequests } = useAuth();
+  const { user, canManageUsers, canApproveRequests, hasPermission } = useAuth();
 
   if (!user) return null;
+
+  // Use folder view for admin and internal users with full stats
+  const showFolderView =
+    user.role === "admin" || hasPermission("canViewAnalytics");
+
+  if (showFolderView) {
+    return (
+      <StatsFolderView
+        requestStats={data.requests}
+        userStats={data.users}
+        datasetStats={data.datasets}
+        reviewStats={data.reviews}
+        exportStats={data.exports}
+        userRole={user.role}
+      />
+    );
+  }
 
   return (
     <StatsCards
@@ -48,12 +66,15 @@ function RecentRequestsWrapper({ dataPromise }: { dataPromise: Promise<any> }) {
 }
 
 export default function DashboardContent() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   if (!user) return null;
 
   // Create the promise once using useMemo to prevent re-creating on every render
   const dashboardDataPromise = useMemo(() => api.getDashboardData(), []);
+
+  const showFolderView =
+    user.role === "admin" || hasPermission("canViewAnalytics");
 
   const getWelcomeMessage = () => {
     switch (user.role) {
@@ -110,7 +131,11 @@ export default function DashboardContent() {
       </div>
 
       {/* Stats Cards with Suspense */}
-      <Suspense fallback={<StatsCardsSkeleton />}>
+      <Suspense
+        fallback={
+          showFolderView ? <StatsFolderViewSkeleton /> : <StatsCardsSkeleton />
+        }
+      >
         <StatsCardsWrapper dataPromise={dashboardDataPromise} />
       </Suspense>
 

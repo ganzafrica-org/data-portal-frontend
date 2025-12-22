@@ -1,6 +1,15 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { QueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import {
+  LAISSchema,
+  LAISTable,
+  LAISColumn,
+  LAISRelationship,
+  LAISSearchResult,
+  DatasetCriteriaResponse,
+  ExportItem,
+} from "./data";
 
 // API CLIENT CONFIGURATION
 
@@ -246,12 +255,26 @@ export interface LoginResponse {
 // ANALYTICS & DASHBOARD TYPES
 
 export interface RequestStats {
-  total: number;
+  total?: number;
+  myRequests?: number;
   pending: number;
   approved: number;
   rejected: number;
   in_review: number;
-  resubmitted?: number;
+  changes_requested?: number;
+  partially_approved?: number;
+  approvalRate?: number;
+  avgProcessingDays?: number;
+  currentMonth?: {
+    total: number;
+    approved: number;
+  };
+  byPriority?: {
+    urgent: number;
+    high: number;
+    normal: number;
+    low: number;
+  };
 }
 
 export interface UserStats {
@@ -261,12 +284,56 @@ export interface UserStats {
   admin: number;
   verified: number;
   unverified: number;
+  active?: number;
+  inactive?: number;
+  currentMonth?: number;
 }
 
 export interface DatasetStats {
   total: number;
   categories: number;
   totalRequests: number;
+  currentMonthRequests?: number;
+  mostRequested?: Array<{
+    datasetId: string;
+    count: number;
+  }>;
+}
+
+export interface ReviewStats {
+  total: number;
+  pending: number;
+  in_progress: number;
+  approved: number;
+  rejected: number;
+  changes_requested: number;
+  activeReviewers: number;
+  byDataset?: Array<{
+    datasetId: string;
+    reviewerCount: number;
+  }>;
+  byProvince?: Array<{
+    provinceId: string;
+    reviewerCount: number;
+  }>;
+  byDistrict?: Array<{
+    districtId: string;
+    reviewerCount: number;
+  }>;
+}
+
+export interface ExportStats {
+  total: number;
+  currentMonth: number;
+  totalDownloads: number;
+  byFormat: {
+    csv: number;
+    xlsx: number;
+    json: number;
+    shapefile: number;
+    pdf: number;
+  };
+  activeExports: number;
 }
 
 export interface RecentRequest {
@@ -294,6 +361,8 @@ export interface DashboardData {
   requests: RequestStats;
   users?: UserStats;
   datasets?: DatasetStats;
+  reviews?: ReviewStats;
+  exports?: ExportStats;
   recentActivity: RecentRequest[];
   requestsByMonth?: MonthlyData[];
 }
@@ -463,7 +532,6 @@ export const api = {
   },
 
   getDatasetCategories: async (params?: {
-    includeInactive?: boolean;
     search?: string;
   }): Promise<any[]> => {
     const response = await apiClient.get<ApiResponse<any[]>>(
@@ -493,7 +561,6 @@ export const api = {
       icon?: string;
       description?: string;
       sortOrder?: number;
-      deactivatedAt?: string | null;
     },
   ): Promise<any> => {
     const response = await apiClient.put<ApiResponse<any>>(
@@ -505,7 +572,6 @@ export const api = {
 
   getDatasets: async (params?: {
     categoryId?: string;
-    includeInactive?: boolean;
     search?: string;
     page?: number;
     limit?: number;
@@ -566,7 +632,6 @@ export const api = {
       requiresApproval?: boolean;
       autoApproveForRoles?: string[];
       allowsRecurring?: boolean;
-      deactivatedAt?: string | null;
     },
   ): Promise<any> => {
     const response = await apiClient.put<ApiResponse<any>>(
@@ -737,50 +802,6 @@ export const api = {
       responseType: "blob",
     });
     return response.data;
-  },
-
-  // Comments
-  getRequestComments: async (requestId: string): Promise<RequestComment[]> => {
-    const response = await apiClient.get<ApiResponse<RequestComment[]>>(
-      `/requests/${requestId}/comments`,
-    );
-    return response.data.data!;
-  },
-
-  addComment: async (
-    requestId: string,
-    data: {
-      comment: string;
-      isInternal?: boolean;
-      parentCommentId?: string;
-    },
-  ): Promise<RequestComment> => {
-    const response = await apiClient.post<ApiResponse<RequestComment>>(
-      `/requests/${requestId}/comments`,
-      data,
-    );
-    return response.data.data!;
-  },
-
-  updateComment: async (
-    requestId: string,
-    commentId: string,
-    data: {
-      comment: string;
-    },
-  ): Promise<RequestComment> => {
-    const response = await apiClient.put<ApiResponse<RequestComment>>(
-      `/requests/${requestId}/comments/${commentId}`,
-      data,
-    );
-    return response.data.data!;
-  },
-
-  deleteComment: async (
-    requestId: string,
-    commentId: string,
-  ): Promise<void> => {
-    await apiClient.delete(`/requests/${requestId}/comments/${commentId}`);
   },
 
   // Documents
@@ -996,11 +1017,177 @@ export const api = {
     );
     return response.data.data!;
   },
+
+  // ============================================================================
+  // LAIS SCHEMA ENDPOINTS (Admin - Visual Query Builder)
+  // ============================================================================
+
+  getLAISSchemas: async (): Promise<LAISSchema[]> => {
+    const response = await apiClient.get<ApiResponse<LAISSchema[]>>(
+      "/lais-schema/schemas",
+    );
+    return response.data.data!;
+  },
+
+  getLAISTables: async (schema: string): Promise<LAISTable[]> => {
+    const response = await apiClient.get<ApiResponse<LAISTable[]>>(
+      "/lais-schema/tables",
+      { params: { schema } },
+    );
+    return response.data.data!;
+  },
+
+  getLAISColumns: async (
+    schema: string,
+    table: string,
+  ): Promise<LAISColumn[]> => {
+    const response = await apiClient.get<
+      ApiResponse<{ columns: LAISColumn[] }>
+    >("/lais-schema/columns", { params: { schema, table } });
+    return response.data.data?.columns || [];
+  },
+
+  getLAISRelationships: async (
+    schema: string,
+    table: string,
+  ): Promise<LAISRelationship[]> => {
+    const response = await apiClient.get<ApiResponse<LAISRelationship[]>>(
+      "/lais-schema/relationships",
+      { params: { schema, table } },
+    );
+    return response.data.data!;
+  },
+
+  searchLAISSchema: async (keyword: string): Promise<LAISSearchResult[]> => {
+    const response = await apiClient.get<ApiResponse<LAISSearchResult[]>>(
+      "/lais-schema/search",
+      { params: { keyword } },
+    );
+    return response.data.data!;
+  },
+
+  validateQueryConfig: async (
+    queryConfig: any,
+  ): Promise<{
+    valid: boolean;
+    errors: string[];
+  }> => {
+    const response = await apiClient.post<
+      ApiResponse<{ valid: boolean; errors: string[] }>
+    >("/datasets/validate-config", { queryConfig });
+    return response.data.data!;
+  },
+
+  // ============================================================================
+  // DATASET CRITERIA ENDPOINTS (Users - Dynamic Forms)
+  // ============================================================================
+
+  getDatasetCriteria: async (
+    datasetId: string,
+  ): Promise<DatasetCriteriaResponse> => {
+    const response = await apiClient.get<ApiResponse<DatasetCriteriaResponse>>(
+      `/datasets/${datasetId}/criteria`,
+    );
+    return response.data.data!;
+  },
+
+  previewDataset: async (
+    datasetId: string,
+    criteriaValues: Record<string, any>,
+  ): Promise<{
+    datasetId: string;
+    datasetName: string;
+    totalRows: number;
+    previewRows: any[];
+    columnNames: string[];
+    executionTime: string;
+    message: string;
+  }> => {
+    const response = await apiClient.post<
+      ApiResponse<{
+        datasetId: string;
+        datasetName: string;
+        totalRows: number;
+        previewRows: any[];
+        columnNames: string[];
+        executionTime: string;
+        message: string;
+      }>
+    >(`/datasets/${datasetId}/preview`, { criteriaValues });
+    return response.data.data!;
+  },
+
+  // ============================================================================
+  // EXPORT & DOWNLOAD ENDPOINTS
+  // ============================================================================
+
+  getRequestExports: async (
+    requestId: string,
+  ): Promise<{
+    requestId: string;
+    requestNumber: string;
+    status: string;
+    exports: ExportItem[];
+  }> => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        requestId: string;
+        requestNumber: string;
+        status: string;
+        exports: ExportItem[];
+      }>
+    >(`/exports/${requestId}`);
+    return response.data.data!;
+  },
+
+  downloadRequestExport: async (exportLogId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/downloads/${exportLogId}`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  deleteRequestExport: async (exportLogId: string): Promise<void> => {
+    await apiClient.delete(`/downloads/${exportLogId}`);
+  },
+
+  getExportStatus: async (
+    requestId: string,
+  ): Promise<{
+    status: "not_started" | "processing" | "completed" | "failed";
+    totalDatasets: number;
+    approvedDatasets: number;
+    failedDatasets: number;
+  }> => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        status: "not_started" | "processing" | "completed" | "failed";
+        totalDatasets: number;
+        approvedDatasets: number;
+        failedDatasets: number;
+      }>
+    >(`/exports/status/${requestId}`);
+    return response.data.data!;
+  },
 };
 
 // ============================================================================
 // REQUESTS TYPES
 // ============================================================================
+
+export interface ExportItem {
+  id: string;
+  exportType: string;
+  exportFormat?: string;
+  datasetInfo?: any;
+  fileSize: number;
+  downloadCount: number;
+  expiresAt: string;
+  createdAt: string;
+  daysRemaining?: number;
+  isExpired?: boolean;
+  downloadUrl?: string;
+}
 
 export interface RequestDocument {
   id: string;
@@ -1018,33 +1205,32 @@ export interface RequestDocument {
   };
 }
 
-export interface RequestComment {
-  id: string;
-  requestId: string;
-  userId: string;
-  comment: string;
-  isInternal: boolean;
-  parentCommentId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-  };
-  replies?: RequestComment[];
-}
-
 export interface RequestDataset {
   id: string;
   datasetId: string;
   datasetStatus: string;
-  criteria: any;
+  criteria: any; // Deprecated - criteria fields are now at the top level
+  // Criteria fields (flattened at root level in API response)
+  dateRangeFrom?: string;
+  dateRangeTo?: string;
+  administrativeLevel?: {
+    provinces?: string[];
+    districts?: string[];
+    sectors?: string[];
+    cells?: string[];
+    villages?: string[];
+  };
+  transactionTypes?: string[];
+  landUseTypes?: string[];
+  sizeRangeMin?: number | null;
+  sizeRangeMax?: number | null;
+  upiList?: string[];
+  idList?: string[];
+  userId?: string;
+  additionalCriteria?: any;
   dataset: {
     id: string;
     name: string;
-    deactivatedAt: string | null;
   };
 }
 
@@ -1079,6 +1265,8 @@ export interface Request {
   };
   datasets: RequestDataset[];
   documents: RequestDocument[];
+  reviews?: RequestReview[];
+  exports?: ExportItem[];
   _count: {
     comments: number;
   };
@@ -1145,6 +1333,7 @@ export interface RequestReview {
     | "changes_requested"
     | "delegated";
   reviewNotes: string | null;
+  isInternal: boolean;
   assignedBy: string;
   assignedAt: string;
   reviewedAt: string | null;

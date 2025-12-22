@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { api, getErrorMessage } from "@/lib/api-config";
@@ -22,7 +17,7 @@ export default function AnalyticsTab() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const data = await api.getDatasets({ includeInactive: true, limit: 100 });
+      const data = await api.getDatasets({ limit: 100 });
       setDatasets(data.datasets || data);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -41,8 +36,8 @@ export default function AnalyticsTab() {
     );
   }
 
-  const activeDatasets = datasets.filter((d) => !d.deactivatedAt).length;
-  const inactiveDatasets = datasets.length - activeDatasets;
+  const activeDatasets = datasets.length;
+  const inactiveDatasets = 0; // No longer tracking inactive datasets
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

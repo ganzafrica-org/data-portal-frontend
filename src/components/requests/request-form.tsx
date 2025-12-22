@@ -54,15 +54,9 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { api, getErrorMessage, type Request } from "@/lib/api-config";
-import {
-  DATASET_CATEGORIES,
-  TRANSACTION_TYPES,
-  LAND_USE_TYPES,
-} from "@/lib/dataset-config";
-import DateRangePicker from "@/components/date-range-picker";
-import AdministrativeLevelSelector from "@/components/administrative-level-selector";
-import MultiSelectDropdown from "@/components/multi-select-dropdown";
+import { DATASET_CATEGORIES } from "@/lib/dataset-config";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import DynamicDatasetCriteriaForm from "@/components/requests/dynamic-dataset-criteria-form";
 
 interface DatasetSelection {
   id: string;
@@ -403,37 +397,32 @@ export default function RequestForm({
     const loadDatasetCategories = async () => {
       try {
         setIsLoadingDatasets(true);
-        const categories = await api.getDatasetCategories({
-          includeInactive: false,
-        });
+        const categories = await api.getDatasetCategories();
 
-        // Filter out deactivated categories and datasets
+        // Map categories and datasets
         const activeCategories = categories
-          .filter((cat: any) => !cat.deactivatedAt)
           .map((cat: any) => ({
             id: cat.id,
             name: cat.name,
             icon: cat.icon,
             description: cat.description,
             sortOrder: cat.sortOrder,
-            datasets: cat.datasets
-              .filter((ds: any) => !ds.deactivatedAt)
-              .map((ds: any) => ({
-                id: ds.id,
-                name: ds.name,
-                description: ds.description || "",
-                requiresPeriod: ds.requiresPeriod,
-                requiresUpiList: ds.requiresUpiList,
-                requiresIdList: ds.requiresIdList,
-                requiresUpi: ds.requiresUpi,
-                hasAdminLevel: ds.hasAdminLevel,
-                hasUserLevel: ds.hasUserLevel,
-                hasTransactionType: ds.hasTransactionType,
-                hasLandUse: ds.hasLandUse,
-                hasSizeRange: ds.hasSizeRange,
-                fields: ds.fields,
-                criteria: ds.criteria,
-              })),
+            datasets: cat.datasets.map((ds: any) => ({
+              id: ds.id,
+              name: ds.name,
+              description: ds.description || "",
+              requiresPeriod: ds.requiresPeriod,
+              requiresUpiList: ds.requiresUpiList,
+              requiresIdList: ds.requiresIdList,
+              requiresUpi: ds.requiresUpi,
+              hasAdminLevel: ds.hasAdminLevel,
+              hasUserLevel: ds.hasUserLevel,
+              hasTransactionType: ds.hasTransactionType,
+              hasLandUse: ds.hasLandUse,
+              hasSizeRange: ds.hasSizeRange,
+              fields: ds.fields,
+              criteria: ds.criteria,
+            })),
           }))
           .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
 
@@ -472,6 +461,51 @@ export default function RequestForm({
       loadDocuments();
     }
   }, [requestId, mode]);
+
+  // Load existing datasets when editing
+  const datasetsLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      initialData &&
+      initialData.datasets &&
+      initialData.datasets.length > 0 &&
+      datasetCategories.length > 0 &&
+      !datasetsLoadedRef.current
+    ) {
+      // Mark as loaded to prevent re-running
+      datasetsLoadedRef.current = true;
+
+      // Convert backend datasets to frontend DatasetSelection format
+      const loadedSelections: DatasetSelection[] = initialData.datasets.map(
+        (rd, index) => {
+          // Find the category for this dataset by searching in datasetCategories
+          let categoryId = "";
+          for (const category of datasetCategories) {
+            if (category.datasets.some((ds: any) => ds.id === rd.datasetId)) {
+              categoryId = category.id;
+              break;
+            }
+          }
+
+          // With the new dynamic system, criteriaValues is already a flexible JSON object
+          // We just pass it directly to the DynamicDatasetCriteriaForm component
+          const criteriaValues = rd.criteriaValues || rd.criteria || {};
+
+          return {
+            id: `loaded-${index}-${Date.now()}`,
+            category: categoryId,
+            type: rd.datasetId,
+            criteria: criteriaValues, // Use criteriaValues directly
+            isOpen: false,
+            datasetId: rd.id, // Backend RequestDataset ID
+          };
+        },
+      );
+
+      setDatasetSelections(loadedSelections);
+    }
+  }, [initialData, datasetCategories]);
 
   // Auto-save draft on changes (debounced)
   const saveDraftTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -598,76 +632,18 @@ export default function RequestForm({
     );
   };
 
-  const updateDatasetCriteria = (
-    selectionId: string,
-    criterion: string,
-    value: any,
-  ) => {
-    setDatasetSelections((selections) =>
-      selections.map((selection) =>
-        selection.id === selectionId
-          ? {
-              ...selection,
-              criteria: { ...selection.criteria, [criterion]: value },
-            }
-          : selection,
-      ),
-    );
-  };
-
   // Save dataset to backend when configuration is complete
   const saveDatasetToBackend = async (selection: DatasetSelection) => {
     if (!requestId || !selection.type) return;
 
-    const category =
-      availableDatasets[selection.category as keyof typeof availableDatasets];
-    const dataset = category?.datasets.find((d) => d.id === selection.type);
-
-    if (!dataset) return;
-
     try {
-      const criteria: any = {
+      // The new backend API expects criteriaValues as a flexible JSON object
+      const payload = {
         datasetId: selection.type,
+        criteriaValues: selection.criteria, // Pass criteria directly as flexible JSON
       };
 
-      if (selection.criteria.dateRange?.from) {
-        criteria.dateRangeFrom =
-          selection.criteria.dateRange.from.toISOString();
-        if (selection.criteria.dateRange.to) {
-          criteria.dateRangeTo = selection.criteria.dateRange.to.toISOString();
-        }
-      }
-
-      if (selection.criteria.upiList?.length > 0) {
-        criteria.upiList = selection.criteria.upiList;
-      }
-
-      if (selection.criteria.idList?.length > 0) {
-        criteria.idList = selection.criteria.idList;
-      }
-
-      if (selection.criteria.transactionTypes?.length > 0) {
-        criteria.transactionTypes = selection.criteria.transactionTypes;
-      }
-
-      if (selection.criteria.landUseTypes?.length > 0) {
-        criteria.landUseTypes = selection.criteria.landUseTypes;
-      }
-
-      if (selection.criteria.minSize) {
-        criteria.sizeRangeMin = parseFloat(selection.criteria.minSize);
-      }
-
-      if (selection.criteria.maxSize) {
-        criteria.sizeRangeMax = parseFloat(selection.criteria.maxSize);
-      }
-
-      if (selection.criteria.administrativeSelection) {
-        criteria.administrativeLevel =
-          selection.criteria.administrativeSelection;
-      }
-
-      const savedDataset = await api.addDatasetToRequest(requestId, criteria);
+      const savedDataset = await api.addDatasetToRequest(requestId, payload);
 
       // Update local state with backend ID
       setDatasetSelections((selections) =>
@@ -824,215 +800,41 @@ export default function RequestForm({
                 </div>
               </div>
 
-              {dataset && <DatasetPreview dataset={dataset} />}
-
               {dataset && (
-                <div className="space-y-6 p-4 bg-gray-50 rounded-lg border">
-                  <div className="flex items-center">
-                    <Filter className="h-4 w-4 mr-2 text-primary" />
-                    <h4 className="font-medium text-gray-900">
-                      Dataset Configuration
-                    </h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {dataset.hasAdminLevel && (
-                      <div className="md:col-span-2">
-                        <AdministrativeLevelSelector
-                          value={
-                            selection.criteria.administrativeSelection || {
-                              provinces: [],
-                              districts: [],
-                              sectors: [],
-                              cells: [],
-                              villages: [],
-                            }
-                          }
-                          onChange={(adminSelection) =>
-                            updateDatasetCriteria(
-                              selection.id,
-                              "administrativeSelection",
-                              adminSelection,
-                            )
-                          }
-                          disabled={!canEdit}
-                        />
-                      </div>
-                    )}
-
-                    {dataset.hasTransactionType && (
-                      <div className="space-y-2">
-                        <Label>Transaction Types</Label>
-                        <MultiSelectDropdown
-                          options={TRANSACTION_TYPES}
-                          selectedValues={
-                            selection.criteria.transactionTypes || []
-                          }
-                          onSelectionChange={(selected) =>
-                            updateDatasetCriteria(
-                              selection.id,
-                              "transactionTypes",
-                              selected,
-                            )
-                          }
-                          placeholder="Select transaction types"
-                          disabled={!canEdit}
-                        />
-                      </div>
-                    )}
-
-                    {dataset.hasLandUse && (
-                      <div className="space-y-2">
-                        <Label>Land Use Types</Label>
-                        <MultiSelectDropdown
-                          options={LAND_USE_TYPES}
-                          selectedValues={selection.criteria.landUseTypes || []}
-                          onSelectionChange={(selected) =>
-                            updateDatasetCriteria(
-                              selection.id,
-                              "landUseTypes",
-                              selected,
-                            )
-                          }
-                          placeholder="Select land use types"
-                          disabled={!canEdit}
-                        />
-                      </div>
-                    )}
-
-                    {dataset.hasSizeRange && (
-                      <div className="space-y-2">
-                        <Label>Size Range (hectares)</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={selection.criteria.minSize || ""}
-                            onChange={(e) =>
-                              updateDatasetCriteria(
-                                selection.id,
-                                "minSize",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Min size"
-                            disabled={!canEdit}
-                          />
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={selection.criteria.maxSize || ""}
-                            onChange={(e) =>
-                              updateDatasetCriteria(
-                                selection.id,
-                                "maxSize",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Max size"
-                            disabled={!canEdit}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {dataset.hasUserLevel && (
-                      <div className="space-y-2">
-                        <Label>User ID *</Label>
-                        <Input
-                          value={selection.criteria.userId || ""}
-                          onChange={(e) =>
-                            updateDatasetCriteria(
-                              selection.id,
-                              "userId",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Enter user ID"
-                          disabled={!canEdit}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {dataset.requiresPeriod && (
-                      <div className="space-y-2">
-                        <Label>
-                          Date Period <span className="text-red-500">*</span>
-                        </Label>
-                        <DateRangePicker
-                          dateRange={selection.criteria.dateRange}
-                          onDateRangeChange={(range) =>
-                            updateDatasetCriteria(
-                              selection.id,
-                              "dateRange",
-                              range,
-                            )
-                          }
-                          disabled={!canEdit}
-                        />
-                      </div>
-                    )}
-
-                    {(dataset.requiresUpi || dataset.requiresUpiList) && (
-                      <div className="space-y-2">
-                        <Label>
-                          UPI List <span className="text-red-500">*</span>
-                        </Label>
-                        <UpiInput
-                          value={selection.criteria.upiList || []}
-                          onChange={(upis) =>
-                            updateDatasetCriteria(selection.id, "upiList", upis)
-                          }
-                          placeholder="Enter UPI (e.g., 3/01/11/01/88)"
-                          disabled={!canEdit}
-                        />
-                        {dataset.requiresUpi && (
-                          <p className="text-sm text-muted-foreground">
-                            At least one UPI is required
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {dataset.requiresIdList && (
-                      <div className="space-y-2">
-                        <Label>
-                          National ID List{" "}
-                          <span className="text-red-500">*</span>
-                        </Label>
-                        <UpiInput
-                          value={selection.criteria.idList || []}
-                          onChange={(ids) =>
-                            updateDatasetCriteria(selection.id, "idList", ids)
-                          }
-                          placeholder="Enter National ID"
-                          disabled={!canEdit}
-                        />
-                        <p className="text-sm text-muted-foreground">
-                          Upload a CSV file with IDs or enter them manually
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {canEdit &&
-                    isDraftCreated &&
-                    selection.type &&
-                    !selection.datasetId && (
-                      <Button
-                        type="button"
-                        onClick={() => saveDatasetToBackend(selection)}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Dataset Configuration
-                      </Button>
-                    )}
-                </div>
+                <DynamicDatasetCriteriaForm
+                  datasetId={selection.type}
+                  datasetName={dataset.name}
+                  onCriteriaChange={(criteriaValues) => {
+                    // Update the selection's criteria with the dynamic values
+                    setDatasetSelections((selections) =>
+                      selections.map((s) =>
+                        s.id === selection.id
+                          ? { ...s, criteria: criteriaValues }
+                          : s,
+                      ),
+                    );
+                  }}
+                  initialValues={selection.criteria}
+                />
               )}
+
+              {dataset &&
+                canEdit &&
+                isDraftCreated &&
+                selection.type &&
+                !selection.datasetId && (
+                  <div className="mt-4">
+                    <Button
+                      type="button"
+                      onClick={() => saveDatasetToBackend(selection)}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Dataset Configuration
+                    </Button>
+                  </div>
+                )}
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
@@ -1145,44 +947,8 @@ export default function RequestForm({
         return false;
       }
 
-      const category =
-        availableDatasets[selection.category as keyof typeof availableDatasets];
-      const dataset = category?.datasets.find((d) => d.id === selection.type);
-
-      if (
-        dataset?.hasAdminLevel &&
-        !selection.criteria.administrativeSelection?.provinces?.length
-      ) {
-        toast.error("Please select administrative level for all datasets");
-        return false;
-      }
-
-      if (dataset?.requiresPeriod && !selection.criteria.dateRange) {
-        toast.error(
-          "Please select date range for all datasets that require it",
-        );
-        return false;
-      }
-
-      if (
-        (dataset?.requiresUpi || dataset?.requiresUpiList) &&
-        (!selection.criteria.upiList || selection.criteria.upiList.length === 0)
-      ) {
-        toast.error(
-          "Please provide at least one UPI for datasets that require it",
-        );
-        return false;
-      }
-
-      if (
-        dataset?.requiresIdList &&
-        (!selection.criteria.idList || selection.criteria.idList.length === 0)
-      ) {
-        toast.error(
-          "Please provide at least one National ID for datasets that require it",
-        );
-        return false;
-      }
+      // With dynamic criteria, specific validation is handled by the backend
+      // The DynamicDatasetCriteriaForm component enforces required fields via preview
     }
 
     return true;
