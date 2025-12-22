@@ -33,6 +33,10 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  Package,
+  Loader2,
+  Archive,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
@@ -77,6 +81,10 @@ export default function RequestDetails({
   const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(
     new Set(),
   );
+  const [exports, setExports] = useState<any[]>([]);
+  const [isLoadingExports, setIsLoadingExports] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   if (!user) return null;
 
@@ -119,6 +127,64 @@ export default function RequestDetails({
 
     loadReviews();
   }, [request.id, user.id]);
+
+  // Load exports when request is approved
+  useEffect(() => {
+    const loadExports = async () => {
+      if (request.status !== "approved") {
+        return;
+      }
+
+      try {
+        setIsLoadingExports(true);
+        const exportsData = await api.getRequestExports(request.id);
+        setExports(exportsData.exports || []);
+
+        // Check if exports are being generated
+        if (exportsData.exports.length === 0) {
+          const statusData = await api.getExportStatus(request.id);
+          setExportStatus(statusData.status);
+
+          // Poll status if processing
+          if (statusData.status === "processing") {
+            const pollInterval = setInterval(async () => {
+              try {
+                const updatedStatus = await api.getExportStatus(request.id);
+                setExportStatus(updatedStatus.status);
+
+                if (updatedStatus.status === "completed") {
+                  clearInterval(pollInterval);
+                  // Reload exports
+                  const updatedExports = await api.getRequestExports(
+                    request.id,
+                  );
+                  setExports(updatedExports.exports || []);
+                }
+
+                if (updatedStatus.status === "failed") {
+                  clearInterval(pollInterval);
+                  toast.error(
+                    "Export generation failed. Please contact support.",
+                  );
+                }
+              } catch (error) {
+                console.error("Failed to poll export status:", error);
+              }
+            }, 5000); // Poll every 5 seconds
+
+            // Cleanup on unmount
+            return () => clearInterval(pollInterval);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load exports:", error);
+      } finally {
+        setIsLoadingExports(false);
+      }
+    };
+
+    loadExports();
+  }, [request.id, request.status]);
 
   // Refresh request data
   const refreshRequest = async () => {
@@ -308,6 +374,33 @@ export default function RequestDetails({
       }, 1000);
     } catch (error) {
       toast.error(getErrorMessage(error));
+    }
+  };
+
+  const handleDownloadExport = async (exportId: string) => {
+    try {
+      setIsDownloading(true);
+      const blob = await api.downloadRequestExport(exportId);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `request-${request.requestNumber}-data.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("Download started successfully");
+
+      // Refresh exports to update download count
+      const exportsData = await api.getRequestExports(request.id);
+      setExports(exportsData.exports || []);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -942,16 +1035,176 @@ export default function RequestDetails({
                   </Button>
                 </>
               )}
-
-              {request.status === "approved" &&
-                (isOwner || hasPermission("canExportData")) && (
-                  <Button variant="outline" className="w-full">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Data Package
-                  </Button>
-                )}
             </CardContent>
           </Card>
+
+          {/* Data Exports Section */}
+          {request.status === "approved" &&
+            (isOwner || hasPermission("canExportData")) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    Data Exports
+                  </CardTitle>
+                  <CardDescription>
+                    Download your approved data package
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingExports ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    </div>
+                  ) : exportStatus === "processing" ? (
+                    <Alert>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <AlertTitle>Preparing Your Data</AlertTitle>
+                      <AlertDescription>
+                        Your data exports are being prepared. This may take a
+                        few minutes. This page will automatically update when
+                        ready.
+                      </AlertDescription>
+                    </Alert>
+                  ) : exports.length === 0 ? (
+                    <Alert>
+                      <Clock className="h-4 w-4" />
+                      <AlertTitle>Export Pending</AlertTitle>
+                      <AlertDescription>
+                        Your data export will be available shortly. Please check
+                        back in a few minutes.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="space-y-4">
+                      {exports.map((exportItem) => {
+                        const isExpired = exportItem.isExpired;
+                        const isExpiringSoon =
+                          !isExpired && (exportItem.daysRemaining || 0) <= 3;
+
+                        return (
+                          <div
+                            key={exportItem.id}
+                            className={`border rounded-lg p-4 ${
+                              isExpired ? "bg-gray-50 opacity-60" : "bg-white"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3 flex-1">
+                                <Archive
+                                  className={`h-5 w-5 mt-0.5 ${
+                                    isExpired
+                                      ? "text-gray-400"
+                                      : "text-blue-600"
+                                  }`}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-semibold text-gray-900">
+                                      Data Package (ZIP)
+                                    </h4>
+                                    {isExpired && (
+                                      <Badge variant="destructive">
+                                        Expired
+                                      </Badge>
+                                    )}
+                                    {isExpiringSoon && (
+                                      <Badge
+                                        variant="outline"
+                                        className="bg-yellow-50 text-yellow-700 border-yellow-300"
+                                      >
+                                        ⚠️ Expires in {exportItem.daysRemaining}{" "}
+                                        {exportItem.daysRemaining === 1
+                                          ? "day"
+                                          : "days"}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="space-y-1 text-sm text-gray-600">
+                                    <p>
+                                      <span className="font-medium">Size:</span>{" "}
+                                      {(
+                                        exportItem.fileSize /
+                                        (1024 * 1024)
+                                      ).toFixed(2)}{" "}
+                                      MB
+                                    </p>
+                                    <p>
+                                      <span className="font-medium">
+                                        Downloads:
+                                      </span>{" "}
+                                      {exportItem.downloadCount}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium">
+                                        Created:
+                                      </span>{" "}
+                                      {new Date(
+                                        exportItem.createdAt,
+                                      ).toLocaleString()}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium">
+                                        Expires:
+                                      </span>{" "}
+                                      {new Date(
+                                        exportItem.expiresAt,
+                                      ).toLocaleString()}
+                                    </p>
+                                    {exportItem.datasetInfo && (
+                                      <p className="text-xs text-gray-500 mt-2">
+                                        Contains{" "}
+                                        {exportItem.datasetInfo.datasetsCount ||
+                                          request.datasets.length}{" "}
+                                        dataset(s)
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                {!isExpired && (
+                                  <Button
+                                    onClick={() =>
+                                      handleDownloadExport(exportItem.id)
+                                    }
+                                    disabled={isDownloading}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    {isDownloading ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Downloading...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download ZIP
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {isExpired && (
+                              <Alert className="mt-3" variant="destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription>
+                                  This export has expired and the files have
+                                  been deleted. Please contact support if you
+                                  need to regenerate the data.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
           {/* Timeline */}
           <Card>

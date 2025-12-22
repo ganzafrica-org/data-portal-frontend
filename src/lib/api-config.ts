@@ -1,6 +1,15 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { QueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import {
+  LAISSchema,
+  LAISTable,
+  LAISColumn,
+  LAISRelationship,
+  LAISSearchResult,
+  DatasetCriteriaResponse,
+  ExportItem,
+} from "./data";
 
 // API CLIENT CONFIGURATION
 
@@ -1008,11 +1017,177 @@ export const api = {
     );
     return response.data.data!;
   },
+
+  // ============================================================================
+  // LAIS SCHEMA ENDPOINTS (Admin - Visual Query Builder)
+  // ============================================================================
+
+  getLAISSchemas: async (): Promise<LAISSchema[]> => {
+    const response = await apiClient.get<ApiResponse<LAISSchema[]>>(
+      "/lais-schema/schemas",
+    );
+    return response.data.data!;
+  },
+
+  getLAISTables: async (schema: string): Promise<LAISTable[]> => {
+    const response = await apiClient.get<ApiResponse<LAISTable[]>>(
+      "/lais-schema/tables",
+      { params: { schema } },
+    );
+    return response.data.data!;
+  },
+
+  getLAISColumns: async (
+    schema: string,
+    table: string,
+  ): Promise<LAISColumn[]> => {
+    const response = await apiClient.get<
+      ApiResponse<{ columns: LAISColumn[] }>
+    >("/lais-schema/columns", { params: { schema, table } });
+    return response.data.data?.columns || [];
+  },
+
+  getLAISRelationships: async (
+    schema: string,
+    table: string,
+  ): Promise<LAISRelationship[]> => {
+    const response = await apiClient.get<ApiResponse<LAISRelationship[]>>(
+      "/lais-schema/relationships",
+      { params: { schema, table } },
+    );
+    return response.data.data!;
+  },
+
+  searchLAISSchema: async (keyword: string): Promise<LAISSearchResult[]> => {
+    const response = await apiClient.get<ApiResponse<LAISSearchResult[]>>(
+      "/lais-schema/search",
+      { params: { keyword } },
+    );
+    return response.data.data!;
+  },
+
+  validateQueryConfig: async (
+    queryConfig: any,
+  ): Promise<{
+    valid: boolean;
+    errors: string[];
+  }> => {
+    const response = await apiClient.post<
+      ApiResponse<{ valid: boolean; errors: string[] }>
+    >("/datasets/validate-config", { queryConfig });
+    return response.data.data!;
+  },
+
+  // ============================================================================
+  // DATASET CRITERIA ENDPOINTS (Users - Dynamic Forms)
+  // ============================================================================
+
+  getDatasetCriteria: async (
+    datasetId: string,
+  ): Promise<DatasetCriteriaResponse> => {
+    const response = await apiClient.get<ApiResponse<DatasetCriteriaResponse>>(
+      `/datasets/${datasetId}/criteria`,
+    );
+    return response.data.data!;
+  },
+
+  previewDataset: async (
+    datasetId: string,
+    criteriaValues: Record<string, any>,
+  ): Promise<{
+    datasetId: string;
+    datasetName: string;
+    totalRows: number;
+    previewRows: any[];
+    columnNames: string[];
+    executionTime: string;
+    message: string;
+  }> => {
+    const response = await apiClient.post<
+      ApiResponse<{
+        datasetId: string;
+        datasetName: string;
+        totalRows: number;
+        previewRows: any[];
+        columnNames: string[];
+        executionTime: string;
+        message: string;
+      }>
+    >(`/datasets/${datasetId}/preview`, { criteriaValues });
+    return response.data.data!;
+  },
+
+  // ============================================================================
+  // EXPORT & DOWNLOAD ENDPOINTS
+  // ============================================================================
+
+  getRequestExports: async (
+    requestId: string,
+  ): Promise<{
+    requestId: string;
+    requestNumber: string;
+    status: string;
+    exports: ExportItem[];
+  }> => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        requestId: string;
+        requestNumber: string;
+        status: string;
+        exports: ExportItem[];
+      }>
+    >(`/exports/${requestId}`);
+    return response.data.data!;
+  },
+
+  downloadRequestExport: async (exportLogId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/downloads/${exportLogId}`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  deleteRequestExport: async (exportLogId: string): Promise<void> => {
+    await apiClient.delete(`/downloads/${exportLogId}`);
+  },
+
+  getExportStatus: async (
+    requestId: string,
+  ): Promise<{
+    status: "not_started" | "processing" | "completed" | "failed";
+    totalDatasets: number;
+    approvedDatasets: number;
+    failedDatasets: number;
+  }> => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        status: "not_started" | "processing" | "completed" | "failed";
+        totalDatasets: number;
+        approvedDatasets: number;
+        failedDatasets: number;
+      }>
+    >(`/exports/status/${requestId}`);
+    return response.data.data!;
+  },
 };
 
 // ============================================================================
 // REQUESTS TYPES
 // ============================================================================
+
+export interface ExportItem {
+  id: string;
+  exportType: string;
+  exportFormat?: string;
+  datasetInfo?: any;
+  fileSize: number;
+  downloadCount: number;
+  expiresAt: string;
+  createdAt: string;
+  daysRemaining?: number;
+  isExpired?: boolean;
+  downloadUrl?: string;
+}
 
 export interface RequestDocument {
   id: string;
@@ -1091,6 +1266,7 @@ export interface Request {
   datasets: RequestDataset[];
   documents: RequestDocument[];
   reviews?: RequestReview[];
+  exports?: ExportItem[];
   _count: {
     comments: number;
   };
